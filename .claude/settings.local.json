@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start \"\" .venv/Scripts/pythonw.exe main.py)",
+      "Bash(.venv/Scripts/python.exe -c \"import yfinance as yf; print\\(yf.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \":*)",
+      "Bash(.venv/Scripts/python.exe -c \"from vector.store import DataStore; from vector.app import main; print\\(''All imports OK''\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from vector.app import main; print\\(''OK''\\)\")",
+      "Bash(.venv/Scripts/pythonw.exe main.py)",
+      "Bash(timeout /t 3 /nobreak)",
+      "Bash(python -c \"import vector.app\")",
+      "Bash(python main.py)",
+      "Bash(python -c \"from vector.widget_types.total_equity import TotalEquityWidget; print\\(''ok''\\)\")",
+      "Bash(python -c \"import vector.app; print\\(''ok''\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(python -c \"from vector.widget_types.portfolio_vector import PortfolioVectorWidget; print\\(''ok''\\)\")",
+      "Bash(python -c \"from vector.widget_types.recommendation import RecommendationWidget; print\\(''OK''\\)\")"
+    ]
+  }
+}
