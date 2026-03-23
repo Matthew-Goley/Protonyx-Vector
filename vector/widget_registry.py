@@ -1,41 +1,43 @@
 """
-Auto-discovers all VectorWidget subclasses in vector/widget_types/.
+Registry of all VectorWidget subclasses available in the dashboard.
 
-Any .py file placed in that folder that defines a subclass of VectorWidget
-will automatically appear in the dashboard widget picker.
+To add a new widget type:
+1. Add a .py file in vector/widget_types/
+2. Define a class that subclasses VectorWidget
+3. Import it here and add it to _WIDGETS
 """
 
-import importlib
-import pkgutil
-from pathlib import Path
-
 from vector.widget_base import VectorWidget
+from vector.widget_types.dividend_calendar import DividendCalendarWidget
+from vector.widget_types.placeholder import PlaceholderWidget
+from vector.widget_types.portfolio_beta import PortfolioBetaWidget
+from vector.widget_types.portfolio_diversification import PortfolioDiversificationWidget
+from vector.widget_types.portfolio_vector import PortfolioVectorWidget
+from vector.widget_types.portfolio_volatility import PortfolioVolatilityWidget
+from vector.widget_types.positions_list import PositionsListWidget
+from vector.widget_types.recommendation import RecommendationWidget
+from vector.widget_types.sharpe_ratio import SharpeRatioWidget
+from vector.widget_types.total_equity import TotalEquityWidget
 
-
-_cache: list[type[VectorWidget]] | None = None
+_WIDGETS: list[type[VectorWidget]] = [
+    DividendCalendarWidget,
+    PlaceholderWidget,
+    PortfolioBetaWidget,
+    PortfolioDiversificationWidget,
+    PortfolioVectorWidget,
+    PortfolioVolatilityWidget,
+    PositionsListWidget,
+    RecommendationWidget,
+    SharpeRatioWidget,
+    TotalEquityWidget,
+]
 
 
 def discover_widgets() -> list[type[VectorWidget]]:
-    """Return every VectorWidget subclass found in vector/widget_types/."""
-    global _cache
-    if _cache is not None:
-        return _cache
-    types_dir = Path(__file__).parent / 'widget_types'
-    found: list[type[VectorWidget]] = []
-    for _finder, name, _ispkg in pkgutil.iter_modules([str(types_dir)]):
-        module = importlib.import_module(f'vector.widget_types.{name}')
-        for attr_name in dir(module):
-            obj = getattr(module, attr_name)
-            if (
-                isinstance(obj, type)
-                and issubclass(obj, VectorWidget)
-                and obj is not VectorWidget
-            ):
-                found.append(obj)
-    _cache = found
-    return found
+    """Return all registered VectorWidget subclasses."""
+    return _WIDGETS
 
 
 def get_widget_class(class_name: str) -> type[VectorWidget] | None:
     """Look up a widget class by its Python class name."""
-    return next((c for c in discover_widgets() if c.__name__ == class_name), None)
+    return next((c for c in _WIDGETS if c.__name__ == class_name), None)

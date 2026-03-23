@@ -1,17 +1,17 @@
-from pathlib import Path
+from .paths import resource_path, user_data_dir
 
 APP_NAME = 'Vector'
 COMPANY_NAME = 'Protonyx'
 APP_VERSION = '0.1.0'
-DATA_DIR = Path.home() / APP_NAME / 'data'
+DATA_DIR = user_data_dir()
 POSITIONS_FILE = DATA_DIR / 'positions.json'
 SETTINGS_FILE = DATA_DIR / 'settings.json'
 APP_STATE_FILE = DATA_DIR / 'app_state.json'
 PRICE_CACHE_FILE = DATA_DIR / 'price_cache.json'  # legacy - superseded by market_data.json
 MARKET_DATA_FILE = DATA_DIR / 'market_data.json'
 LAYOUT_FILE = DATA_DIR / 'dashboard_layout.json'
-LOGO_PATH = Path(__file__).resolve().parent.parent / 'assets' / 'vector_full.png'
-TASKBAR_LOGO_PATH = Path(__file__).resolve().parent.parent / 'assets' / 'vector_taskbar.png'
+LOGO_PATH = resource_path('assets', 'vector_full.png')
+TASKBAR_LOGO_PATH = resource_path('assets', 'vector_taskbar.png')
 
 DEFAULT_SETTINGS = {
     'theme': 'Dark',
