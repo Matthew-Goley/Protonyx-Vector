@@ -9,7 +9,6 @@ To add a new widget type:
 
 from vector.widget_base import VectorWidget
 from vector.widget_types.dividend_calendar import DividendCalendarWidget
-from vector.widget_types.placeholder import PlaceholderWidget
 from vector.widget_types.portfolio_beta import PortfolioBetaWidget
 from vector.widget_types.portfolio_diversification import PortfolioDiversificationWidget
 from vector.widget_types.portfolio_vector import PortfolioVectorWidget
@@ -20,14 +19,13 @@ from vector.widget_types.sharpe_ratio import SharpeRatioWidget
 from vector.widget_types.total_equity import TotalEquityWidget
 
 _WIDGETS: list[type[VectorWidget]] = [
+    RecommendationWidget,
     DividendCalendarWidget,
-    PlaceholderWidget,
     PortfolioBetaWidget,
     PortfolioDiversificationWidget,
     PortfolioVectorWidget,
     PortfolioVolatilityWidget,
     PositionsListWidget,
-    RecommendationWidget,
     SharpeRatioWidget,
     TotalEquityWidget,
 ]

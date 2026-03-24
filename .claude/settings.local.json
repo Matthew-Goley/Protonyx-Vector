@@ -15,7 +15,9 @@
       "Bash(python -c \":*)",
       "Bash(python -c \"from vector.widget_types.portfolio_vector import PortfolioVectorWidget; print\\(''ok''\\)\")",
       "Bash(python -c \"from vector.widget_types.recommendation import RecommendationWidget; print\\(''OK''\\)\")",
-      "Bash(.venv/Scripts/python.exe main.py)"
+      "Bash(.venv/Scripts/python.exe main.py)",
+      "Bash(.venv/Scripts/python main.py)",
+      "Bash(ls .venv/Scripts/python*)"
     ]
   }
 }

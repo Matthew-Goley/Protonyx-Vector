@@ -116,7 +116,7 @@ class PortfolioVectorWidget(VectorWidget):
     NAME = 'Portfolio Vector'
     DESCRIPTION = 'Directional arrow showing the equity-weighted slope of your portfolio.'
     DEFAULT_ROWSPAN = 3
-    DEFAULT_COLSPAN = 4
+    DEFAULT_COLSPAN = 6
 
     def __init__(self, window=None, parent=None) -> None:
         super().__init__(window=window, parent=parent)

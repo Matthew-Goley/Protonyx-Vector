@@ -624,34 +624,41 @@ class DashboardGrid(QWidget):
 
 class _PickerCard(QFrame):
     def __init__(self, name: str, description: str,
-                 on_click, parent: QWidget | None = None) -> None:
+                 on_click, featured: bool = False,
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._on_click = on_click
-        self.setFixedSize(150, 130)
+        self._featured = featured
+        self.setFixedHeight(64)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.addStretch(1)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 10, 16, 10)
+        layout.setSpacing(12)
         name_lbl = QLabel(name)
         name_font = QFont()
         name_font.setBold(True)
         name_font.setPointSize(11)
         name_lbl.setFont(name_font)
+        name_lbl.setFixedWidth(160)
         name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_lbl = QLabel(description)
         desc_lbl.setWordWrap(True)
         desc_lbl.setStyleSheet('color: #8d98af; font-size: 11px;')
-        desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(name_lbl)
-        layout.addWidget(desc_lbl)
-        layout.addStretch(1)
+        layout.addWidget(desc_lbl, stretch=1)
         self._set_style(False)
 
     def _set_style(self, hovered: bool) -> None:
+        if self._featured:
+            border = '#3A8DFF' if not hovered else '#6aaaff'
+            bg = '#131e35' if hovered else '#0f1a2e'
+        else:
+            border = '#3A8DFF' if hovered else '#2c364a'
+            bg = '#151e30' if hovered else '#121828'
         self.setStyleSheet(f"""
             QFrame {{
-                background: {'#151e30' if hovered else '#121828'};
-                border: 1px solid {'#3A8DFF' if hovered else '#2c364a'};
+                background: {bg};
+                border: {'2px' if self._featured else '1px'} solid {border};
                 border-radius: 12px;
             }}
         """)
@@ -681,6 +688,9 @@ class WidgetPickerDialog(QDialog):
         self.setModal(True)
         self.setWindowTitle('Add Widget')
         self.setMinimumWidth(440)
+        main_win = QApplication.activeWindow()
+        if main_win is not None:
+            self.setMaximumWidth(main_win.width())
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -696,15 +706,16 @@ class WidgetPickerDialog(QDialog):
         sub.setStyleSheet('color: #8d98af;')
         sub.setWordWrap(True)
         layout.addWidget(sub)
-        cards_row = QHBoxLayout()
-        cards_row.setSpacing(12)
+        cards_col = QVBoxLayout()
+        cards_col.setSpacing(8)
+        from vector.widget_types.recommendation import RecommendationWidget as _RW
         for cls in discover_widgets():
-            cards_row.addWidget(_PickerCard(
+            cards_col.addWidget(_PickerCard(
                 cls.NAME, cls.DESCRIPTION,
                 lambda c=cls: self._pick(c),
+                featured=(cls is _RW),
             ))
-        cards_row.addStretch(1)
-        layout.addLayout(cards_row)
+        layout.addLayout(cards_col)
         cancel = QPushButton('Cancel')
         cancel.clicked.connect(self.reject)
         layout.addWidget(cancel, alignment=Qt.AlignmentFlag.AlignRight)
@@ -754,10 +765,10 @@ def _circle_btn_style(font_size: int, active: bool = False) -> str:
 
 _DEFAULT_LAYOUT = [
     {'type': 'RecommendationWidget',      'row': 0, 'col': 1,  'rowspan': 2, 'colspan': 10},
-    {'type': 'PortfolioVectorWidget',     'row': 2, 'col': 5,  'rowspan': 3, 'colspan': 4},
+    {'type': 'PortfolioVectorWidget',     'row': 2, 'col': 5,  'rowspan': 3, 'colspan': 6},
     {'type': 'PositionsListWidget',       'row': 2, 'col': 0,  'rowspan': 3, 'colspan': 5},
     {'type': 'TotalEquityWidget',         'row': 5, 'col': 0,  'rowspan': 2, 'colspan': 4},
-    {'type': 'PortfolioVolatilityWidget', 'row': 5, 'col': 4,  'rowspan': 3, 'colspan': 3},
+    {'type': 'PortfolioVolatilityWidget', 'row': 5, 'col': 4,  'rowspan': 2, 'colspan': 4},
 ]
 
 
@@ -801,7 +812,7 @@ class DashboardPage(QWidget):
         self._scroll.setWidgetResizable(False)
         self._scroll.setFixedWidth(_CONTENT_W)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
 
         row.addWidget(self._scroll)

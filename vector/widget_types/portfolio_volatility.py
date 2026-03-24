@@ -85,8 +85,8 @@ def _vol_color(score: int, low: int, high: int) -> str:
 class PortfolioVolatilityWidget(VectorWidget):
     NAME = 'Volatility'
     DESCRIPTION = 'Equity-weighted portfolio volatility with per-ticker breakdown.'
-    DEFAULT_ROWSPAN = 3
-    DEFAULT_COLSPAN = 3
+    DEFAULT_ROWSPAN = 2
+    DEFAULT_COLSPAN = 4
 
     def __init__(self, window=None, parent=None) -> None:
         super().__init__(window=window, parent=parent)

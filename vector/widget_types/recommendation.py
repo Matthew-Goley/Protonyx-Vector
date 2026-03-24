@@ -50,7 +50,7 @@ class _AccentFrame(QFrame):
 
 class RecommendationWidget(VectorWidget):
     NAME = 'Recommendation'
-    DESCRIPTION = 'Two-sentence AI-style read on your portfolio: outlook and action.'
+    DESCRIPTION = "Vector's Core Functionality"
     DEFAULT_ROWSPAN = 2
     DEFAULT_COLSPAN = 10
 
