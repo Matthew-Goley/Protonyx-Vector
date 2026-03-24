@@ -24,6 +24,7 @@ class VectorWidget(QFrame):
 
     def __init__(self, window=None, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName('vectorWidget')
         self._window = window   # VectorMainWindow reference — access store, positions, settings
         self._edit_mode = False
         self._drag_offset = QPoint()
@@ -35,14 +36,10 @@ class VectorWidget(QFrame):
     # -- styling (subclasses may override) ------------------------------------
 
     def _apply_style(self, edit: bool) -> None:
-        border = '#3A8DFF' if edit else '#2c364a'
-        self.setStyleSheet(f"""
-            QFrame {{
-                background: #121828;
-                border: 1px solid {border};
-                border-radius: 12px;
-            }}
-        """)
+        self.setProperty('editing', 'true' if edit else 'false')
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
 
     # -- edit mode ------------------------------------------------------------
 

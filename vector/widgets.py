@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Iterable
 
 from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
+from PyQt6.QtGui import QBrush, QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
 from PyQt6.QtWidgets import (
+    QApplication,
     QFrame,
     QGraphicsBlurEffect,
     QGraphicsDropShadowEffect,
@@ -27,20 +28,67 @@ class CardFrame(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName('cardFrame')
-        self.setStyleSheet(
-            f"""
-            QFrame#cardFrame {{
-                background: {CARD_BACKGROUND};
-                border: 1px solid {BORDER_COLOR};
-                border-radius: 16px;
-            }}
-            """
-        )
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(32)
         shadow.setOffset(0, 10)
         shadow.setColor(QColor(0, 0, 0, 80))
         self.setGraphicsEffect(shadow)
+
+
+class GradientBorderFrame(QFrame):
+    """Frame with a blue-to-purple gradient border, used for the main header."""
+
+    _RADIUS = 16.0
+    _BORDER_W = 1.5
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        rect = QRectF(self.rect())
+        r = self._RADIUS
+        bw = self._BORDER_W
+
+        app = QApplication.instance()
+        is_dark = app is not None and '#0b1020' in (app.styleSheet() or '')
+        bg = QColor('#0f1526' if is_dark else '#ffffff')
+
+        bg_path = QPainterPath()
+        bg_path.addRoundedRect(rect.adjusted(bw, bw, -bw, -bw), r - bw, r - bw)
+        painter.fillPath(bg_path, bg)
+
+        grad = QLinearGradient(rect.topLeft(), rect.topRight())
+        grad.setColorAt(0.0, QColor('#3A8DFF'))
+        grad.setColorAt(1.0, QColor('#B44AE6'))
+        pen = QPen(QBrush(grad), bw)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        border_path = QPainterPath()
+        border_path.addRoundedRect(
+            rect.adjusted(bw / 2, bw / 2, -bw / 2, -bw / 2), r, r
+        )
+        painter.drawPath(border_path)
+        painter.end()
+
+
+class GradientLine(QWidget):
+    """Thin vertical line with a blue-to-purple gradient, used as the sidebar divider."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFixedWidth(2)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        rect = QRectF(self.rect())
+        grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+        grad.setColorAt(0.0, QColor('#3A8DFF'))
+        grad.setColorAt(1.0, QColor('#B44AE6'))
+        painter.fillRect(rect, QBrush(grad))
+        painter.end()
 
 
 class ArrowIndicator(QWidget):

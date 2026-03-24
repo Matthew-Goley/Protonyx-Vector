@@ -33,7 +33,7 @@ from .analytics import compute_portfolio_analytics
 from .constants import APP_NAME, APP_VERSION, COMPANY_NAME, LOGO_PATH, TASKBAR_LOGO_PATH, VOLATILITY_LOOKBACK_PERIODS
 from .store import DataStore
 from .widget_registry import discover_widgets, get_widget_class
-from .widgets import BlurrableStack, CardFrame, DimOverlay, EmptyState, LoadingButton
+from .widgets import BlurrableStack, CardFrame, DimOverlay, EmptyState, GradientBorderFrame, GradientLine, LoadingButton
 
 
 DARK_STYLESHEET = """
@@ -80,6 +80,34 @@ QTableWidget {
     gridline-color: #243046;
 }
 QScrollArea { border: none; }
+QLabel { background: transparent; }
+QFrame#cardFrame {
+    background: #161b26;
+    border: 1px solid #2a3142;
+    border-radius: 16px;
+}
+QFrame#sidebarFrame {
+    background: #0f1526;
+    border: none;
+}
+QFrame#vectorWidget {
+    background: #121828;
+    border: 1px solid #2c364a;
+    border-radius: 12px;
+}
+QFrame#vectorWidget[editing="true"] { border-color: #3A8DFF; }
+QPushButton#navButton {
+    background: transparent;
+    border: 1px solid transparent;
+    text-align: left;
+    padding-left: 16px;
+}
+QPushButton#navButton:hover { background: #1a2336; border-color: transparent; }
+QPushButton#navButton[active="true"] {
+    background: #151e30;
+    border: 1px solid #2d3c58;
+}
+QLabel#headerBreadcrumb { color: #90a0bb; }
 """
 
 LIGHT_STYLESHEET = """
@@ -118,6 +146,34 @@ QTableWidget {
     gridline-color: #dde4f0;
 }
 QScrollArea { border: none; }
+QLabel { background: transparent; }
+QFrame#cardFrame {
+    background: #ffffff;
+    border: 1px solid #e2e8f4;
+    border-radius: 16px;
+}
+QFrame#sidebarFrame {
+    background: #ffffff;
+    border: none;
+}
+QFrame#vectorWidget {
+    background: #f8faff;
+    border: 1px solid #ccd5e5;
+    border-radius: 12px;
+}
+QFrame#vectorWidget[editing="true"] { border-color: #3A8DFF; }
+QPushButton#navButton {
+    background: transparent;
+    border: 1px solid transparent;
+    text-align: left;
+    padding-left: 16px;
+}
+QPushButton#navButton:hover { background: #edf0f8; border-color: transparent; }
+QPushButton#navButton[active="true"] {
+    background: #e8edf7;
+    border: 1px solid #c5d0e8;
+}
+QLabel#headerBreadcrumb { color: #536075; }
 """
 
 
@@ -1009,38 +1065,33 @@ class MainShell(QWidget):
         root.setSpacing(0)
 
         sidebar = QFrame()
+        sidebar.setObjectName('sidebarFrame')
         sidebar.setFixedWidth(220)
-        sidebar.setStyleSheet('background: #0f1526; border-right: 1px solid #232d40;')
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(20, 24, 20, 24)
         sidebar_layout.setSpacing(12)
         sidebar_layout.addWidget(self.window.make_logo_label(44))
         for name in ('Dashboard', 'Profile', 'Settings'):
             button = QPushButton(name)
+            button.setObjectName('navButton')
             button.clicked.connect(partial(self.set_page, name))
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             sidebar_layout.addWidget(button)
             self.sidebar_buttons[name] = button
         sidebar_layout.addStretch(1)
         root.addWidget(sidebar)
+        root.addWidget(GradientLine())
 
         content = QVBoxLayout()
         content.setContentsMargins(24, 24, 24, 24)
         content.setSpacing(18)
 
-        header = CardFrame()
-        header.setStyleSheet("""
-            QFrame#cardFrame {
-                background: #0f1526;
-                border: 1px solid #232d40;
-                border-radius: 16px;
-            }
-        """)
+        header = GradientBorderFrame()
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(20, 18, 20, 18)
         text_col = QVBoxLayout()
         self.header_title.setStyleSheet('font-size: 22px; font-weight: 700;')
-        self.header_breadcrumb.setStyleSheet('color: #90a0bb;')
+        self.header_breadcrumb.setObjectName('headerBreadcrumb')
         text_col.addWidget(self.header_title)
         text_col.addWidget(self.header_breadcrumb)
         header_layout.addLayout(text_col)
@@ -1062,10 +1113,9 @@ class MainShell(QWidget):
         self.header_title.setText(page_name)
         self.header_breadcrumb.setText(f'Vector / {page_name}')
         for name, button in self.sidebar_buttons.items():
-            if name == page_name:
-                button.setStyleSheet('background: #151e30; border: 1px solid #2d3c58; text-align: left; padding-left: 16px;')
-            else:
-                button.setStyleSheet('text-align: left; padding-left: 16px;')
+            button.setProperty('active', 'true' if name == page_name else 'false')
+            button.style().unpolish(button)
+            button.style().polish(button)
         if page_name == 'Dashboard':
             for item in self.dashboard_page._dash_grid._items:
                 w = item['widget']
@@ -1122,6 +1172,7 @@ class VectorMainWindow(QMainWindow):
 
     def make_logo_label(self, size: int) -> QWidget:
         wrapper = QWidget()
+        wrapper.setStyleSheet('background: transparent;')
         layout = QHBoxLayout(wrapper)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
