@@ -75,8 +75,8 @@ class RecommendationWidget(VectorWidget):
         # Title row
         header = QHBoxLayout()
         title = QLabel('Recommendation')
-        title.setFont(_font(11, bold=False))
-        title.setStyleSheet(f'color: {_MUTED}; border: none;')
+        title.setFont(_font(16, bold=True))
+        title.setStyleSheet('color: #e7ebf3; border: none;')
         header.addWidget(title)
         header.addStretch(1)
         self._status_lbl = QLabel('')

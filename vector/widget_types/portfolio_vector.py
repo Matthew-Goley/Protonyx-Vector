@@ -152,8 +152,8 @@ class PortfolioVectorWidget(VectorWidget):
 
         # ── Title ────────────────────────────────────────────────────────
         title_lbl = QLabel('Portfolio Vector')
-        title_lbl.setFont(_font(12, bold=False))
-        title_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
+        title_lbl.setFont(_font(16, bold=True))
+        title_lbl.setStyleSheet('color: #e7ebf3; border: none;')
         outer.addWidget(title_lbl)
 
         outer.addSpacing(2)

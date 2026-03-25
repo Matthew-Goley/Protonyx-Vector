@@ -99,7 +99,7 @@ class PortfolioVolatilityWidget(VectorWidget):
         header = QHBoxLayout()
         title_lbl = QLabel('Volatility')
         title_lbl.setFont(_title_font(22))
-        title_lbl.setStyleSheet('border: none;')
+        title_lbl.setStyleSheet('color: #e7ebf3; border: none;')
         header.addWidget(title_lbl)
         header.addStretch(1)
         self._label_lbl = QLabel('')
