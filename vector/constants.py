@@ -2,7 +2,7 @@ from .paths import resource_path, user_data_dir
 
 APP_NAME = 'Vector'
 COMPANY_NAME = 'Protonyx'
-APP_VERSION = '0.5.7'
+APP_VERSION = '0.2.0'
 DATA_DIR = user_data_dir()
 POSITIONS_FILE = DATA_DIR / 'positions.json'
 SETTINGS_FILE = DATA_DIR / 'settings.json'

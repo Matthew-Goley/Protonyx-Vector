@@ -10,7 +10,7 @@ import math
 
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from vector.analytics import classify_direction, linear_regression_slope_percent
 from vector.widget_base import VectorWidget
@@ -181,6 +181,13 @@ class PortfolioVectorWidget(VectorWidget):
 
         self._arrow = _VectorArrow()
         content.addWidget(self._arrow, stretch=6)
+
+        # Vertical divider
+        divider = QFrame()
+        divider.setFrameShape(QFrame.Shape.VLine)
+        divider.setStyleSheet('color: #2a3347; background: #2a3347; border: none;')
+        divider.setFixedWidth(1)
+        content.addWidget(divider)
 
         self._verdict_lbl = QLabel('')
         self._verdict_lbl.setFont(_font(12, bold=False))
