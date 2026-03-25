@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import partial
 from typing import Any
 
-from PyQt6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, QTimer, Qt
+from PyQt6.QtCore import QEasingCurve, QPoint, QPointF, QPropertyAnimation, QRect, QTimer, Qt, pyqtProperty
 from PyQt6.QtGui import QAction, QColor, QDoubleValidator, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -80,6 +80,56 @@ QTableWidget {
     gridline-color: #243046;
 }
 QScrollArea { border: none; }
+QScrollBar:vertical {
+    background: transparent;
+    border: none;
+    width: 8px;
+    margin: 0;
+}
+QScrollBar::groove:vertical {
+    background: transparent;
+    border: none;
+}
+QScrollBar::handle:vertical {
+    background: rgba(74, 85, 104, 77);
+    border-radius: 4px;
+    min-height: 32px;
+}
+QScrollBar::handle:vertical:hover { background: rgba(74, 85, 104, 140); }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+    background: none;
+    border: none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+    border: none;
+}
+QScrollBar:horizontal {
+    background: transparent;
+    border: none;
+    height: 8px;
+    margin: 0;
+}
+QScrollBar::groove:horizontal {
+    background: transparent;
+    border: none;
+}
+QScrollBar::handle:horizontal {
+    background: rgba(74, 85, 104, 77);
+    border-radius: 4px;
+    min-width: 32px;
+}
+QScrollBar::handle:horizontal:hover { background: rgba(74, 85, 104, 140); }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+    background: none;
+    border: none;
+}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+    border: none;
+}
 QLabel { background: transparent; }
 QFrame#cardFrame {
     background: #161b26;
@@ -146,6 +196,56 @@ QTableWidget {
     gridline-color: #dde4f0;
 }
 QScrollArea { border: none; }
+QScrollBar:vertical {
+    background: transparent;
+    border: none;
+    width: 8px;
+    margin: 0;
+}
+QScrollBar::groove:vertical {
+    background: transparent;
+    border: none;
+}
+QScrollBar::handle:vertical {
+    background: rgba(141, 153, 172, 77);
+    border-radius: 4px;
+    min-height: 32px;
+}
+QScrollBar::handle:vertical:hover { background: rgba(141, 153, 172, 140); }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+    background: none;
+    border: none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+    border: none;
+}
+QScrollBar:horizontal {
+    background: transparent;
+    border: none;
+    height: 8px;
+    margin: 0;
+}
+QScrollBar::groove:horizontal {
+    background: transparent;
+    border: none;
+}
+QScrollBar::handle:horizontal {
+    background: rgba(141, 153, 172, 77);
+    border-radius: 4px;
+    min-width: 32px;
+}
+QScrollBar::handle:horizontal:hover { background: rgba(141, 153, 172, 140); }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+    background: none;
+    border: none;
+}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+    border: none;
+}
 QLabel { background: transparent; }
 QFrame#cardFrame {
     background: #ffffff;
@@ -812,7 +912,7 @@ class DashboardPage(QWidget):
         self._scroll.setWidgetResizable(False)
         self._scroll.setFixedWidth(_CONTENT_W)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
 
         row.addWidget(self._scroll)
@@ -889,11 +989,139 @@ class ProfilePage(QWidget):
         self.total_value.setText(self.window.format_currency(analytics['portfolio_value']))
 
 
+class _AnimatedChevron(QWidget):
+    """Small chevron icon that rotates smoothly between 0° (›) and 90° (⌄)."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._angle = 0.0
+        self.setFixedSize(22, 22)
+        self._anim = QPropertyAnimation(self, b'angle')
+        self._anim.setDuration(260)
+        self._anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+    def get_angle(self) -> float:
+        return self._angle
+
+    def set_angle(self, value: float) -> None:
+        self._angle = value
+        self.update()
+
+    angle = pyqtProperty(float, get_angle, set_angle)
+
+    def animate_to(self, target: float) -> None:
+        self._anim.stop()
+        self._anim.setStartValue(self._angle)
+        self._anim.setEndValue(target)
+        self._anim.start()
+
+    def paintEvent(self, _event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.translate(11.0, 11.0)
+        painter.rotate(self._angle)
+        pen = QPen(QColor('#8d98af'), 2.0, Qt.PenStyle.SolidLine,
+                   Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        # Draw a right-pointing chevron ›; rotated 90° it becomes ⌄
+        painter.drawLine(QPointF(-3.0, -5.0), QPointF(3.5, 0.0))
+        painter.drawLine(QPointF(3.5, 0.0), QPointF(-3.0, 5.0))
+
+
+class _AccordionSection(CardFrame):
+    """
+    Collapsible settings card with an animated chevron and smooth height expansion.
+    Collapsed by default; clicking the header toggles open/closed.
+    """
+
+    def __init__(self, title: str, parent=None) -> None:
+        super().__init__(parent)
+        self._open = False
+        self._natural_h = 0
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── Header ───────────────────────────────────────────────────────
+        # Use QFrame (not QPushButton) so child widgets render correctly.
+        self._header = QFrame()
+        self._header.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._header.setStyleSheet('border: none; background: transparent;')
+        self._header.mousePressEvent = self._header_clicked
+
+        header_row = QHBoxLayout(self._header)
+        header_row.setContentsMargins(20, 18, 20, 18)
+        header_row.setSpacing(12)
+
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet('font-size: 16px; font-weight: 700; background: transparent; border: none;')
+        self._chevron = _AnimatedChevron()
+
+        header_row.addWidget(title_lbl)
+        header_row.addStretch(1)
+        header_row.addWidget(self._chevron)
+        root.addWidget(self._header)
+
+        # ── Content wrapper (height-animated) ────────────────────────────
+        self._content = QWidget()
+        self._content.setMaximumHeight(0)
+        self._content.setMinimumHeight(0)
+
+        inner = QVBoxLayout(self._content)
+        inner.setContentsMargins(20, 4, 20, 18)
+        inner.setSpacing(0)
+        self._form = QFormLayout()
+        self._form.setSpacing(12)
+        inner.addLayout(self._form)
+        root.addWidget(self._content)
+
+        # ── Height animation ──────────────────────────────────────────────
+        self._anim = QPropertyAnimation(self._content, b'maximumHeight')
+        self._anim.setDuration(280)
+        self._anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._anim.finished.connect(self._on_finished)
+
+    def form(self) -> QFormLayout:
+        return self._form
+
+    def _header_clicked(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._toggle()
+
+    def _measure(self) -> int:
+        self._content.setMaximumHeight(16_777_215)
+        h = self._content.sizeHint().height()
+        self._content.setMaximumHeight(0)
+        return max(h, 32)
+
+    def _toggle(self) -> None:
+        if self._anim.state() == QPropertyAnimation.State.Running:
+            return
+        self._open = not self._open
+        if self._open:
+            if not self._natural_h:
+                self._natural_h = self._measure()
+            self._anim.setStartValue(0)
+            self._anim.setEndValue(self._natural_h)
+            self._chevron.animate_to(90.0)
+        else:
+            self._anim.setStartValue(self._content.height())
+            self._anim.setEndValue(0)
+            self._chevron.animate_to(0.0)
+        self._anim.start()
+
+    def _on_finished(self) -> None:
+        if self._open:
+            self._content.setMaximumHeight(16_777_215)
+
+
 class SettingsPage(QWidget):
     def __init__(self, window: 'VectorMainWindow') -> None:
         super().__init__()
         self.window = window
         self.remove_list = QListWidget()
+        self.remove_list.setMinimumHeight(200)
         self._build_ui()
 
     def _add_section(self, parent: QVBoxLayout, title: str) -> QFormLayout:
@@ -908,6 +1136,11 @@ class SettingsPage(QWidget):
         layout.addLayout(form)
         parent.addWidget(card)
         return form
+
+    def _add_accordion(self, parent: QVBoxLayout, title: str) -> QFormLayout:
+        section = _AccordionSection(title)
+        parent.addWidget(section)
+        return section.form()
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
@@ -927,7 +1160,7 @@ class SettingsPage(QWidget):
         general.addRow('Default Currency', self.currency_combo)
         general.addRow('Date Format', self.date_combo)
 
-        refresh = self._add_section(layout, 'Data & Refresh')
+        refresh = self._add_accordion(layout, 'Data & Refresh')
         self.refresh_combo = QComboBox(); self.refresh_combo.addItems(['1 min', '5 min', '15 min', 'Manual only'])
         clear_cache_button = LoadingButton('Clear Cached Price Data')
         clear_cache_button.clicked.connect(self.window.clear_cache)
@@ -937,7 +1170,7 @@ class SettingsPage(QWidget):
         refresh.addRow('', clear_cache_button)
         refresh.addRow('', reset_button)
 
-        thresholds = self._add_section(layout, 'Portfolio Direction Thresholds')
+        thresholds = self._add_accordion(layout, 'Portfolio Direction Thresholds')
         self.strong_spin = self._spin_box(); self.strong_spin.setRange(-100, 100)
         self.steady_spin = self._spin_box(); self.steady_spin.setRange(-100, 100)
         self.neutral_low_spin = self._spin_box(); self.neutral_low_spin.setRange(-100, 100)
@@ -949,7 +1182,7 @@ class SettingsPage(QWidget):
         thresholds.addRow('Neutral high (%)', self.neutral_high_spin)
         thresholds.addRow('Weak cutoff (%)', self.depreciating_spin)
 
-        volatility = self._add_section(layout, 'Volatility')
+        volatility = self._add_accordion(layout, 'Volatility')
         self.lookback_combo = QComboBox(); self.lookback_combo.addItems(['3 months', '6 months', '1 year'])
         self.low_vol_spin = QSpinBox(); self.low_vol_spin.setRange(1, 100)
         self.high_vol_spin = QSpinBox(); self.high_vol_spin.setRange(1, 100)

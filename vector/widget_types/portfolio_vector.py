@@ -86,10 +86,12 @@ class _VectorArrow(QWidget):
         angle_rad = math.radians(self._angle)
         dy = math.sin(angle_rad) * (h * 0.58)
 
+        # Centre the path vertically — start half-travel below mid, end half above.
+        # This keeps the arrow fully within the widget at any angle.
         x0 = pad_x
-        y0 = mid_y
+        y0 = h / 2.0 + dy / 2.0
         x_end = w - pad_x - 34.0
-        y_end = mid_y - dy
+        y_end = h / 2.0 - dy / 2.0
 
         # Control point: flat start, steepens toward end
         x_ctrl = x0 + (x_end - x0) * 0.65
