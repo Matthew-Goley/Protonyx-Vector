@@ -145,6 +145,7 @@ _SECTOR_ALTERNATIVES: dict[str, str] = {
     'Utilities':             'Technology',
     'Real Estate':           'Technology',
     'Basic Materials':       'Technology',
+    'ETF':                   'Technology',
     'Unknown':               'Technology',
 }
 

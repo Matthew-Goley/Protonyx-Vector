@@ -103,7 +103,8 @@ def classify_direction(value: float, thresholds: dict[str, float]) -> tuple[str,
         label, color = DIRECTION_STATES[4]
     else:
         label, color = DIRECTION_STATES[3]
-    arrow_angle = max(-80.0, min(80.0, value * 200))
+    _sign = 1.0 if value >= 0 else -1.0
+    arrow_angle = _sign * min(80.0, sqrt(abs(value)) * 300)
     return label, color, arrow_angle
 
 
@@ -238,13 +239,14 @@ _SECTOR_TICKERS: dict[str, list[str]] = {
     'Utilities': ['NEE', 'DUK', 'SO', 'D', 'AEP'],
     'Real Estate': ['AMT', 'PLD', 'CCI', 'EQIX', 'SPG'],
     'Basic Materials': ['LIN', 'APD', 'SHW', 'ECL', 'NEM'],
+    'ETF': ['SPY', 'QQQ', 'VTI', 'IWM', 'VEA'],
 }
 
 _UNDERREPRESENTED_SECTORS = [
     'Healthcare', 'Financial Services', 'Consumer Defensive',
     'Energy', 'Industrials', 'Utilities', 'Real Estate',
     'Technology', 'Consumer Cyclical', 'Basic Materials',
-    'Communication Services',
+    'Communication Services', 'ETF',
 ]
 
 

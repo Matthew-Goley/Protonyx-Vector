@@ -1,28 +1,56 @@
 """
-Portfolio Vector widget — large directional arrow showing the weighted slope of the portfolio.
+Portfolio Vector widget — directional arrow + plain-language verdict.
 
-The arrow runs left-to-right and tilts upward (positive slope) or downward (negative slope).
-Slope is the equity-weighted average of each position's 6-month linear regression slope.
-Color maps to direction label (Strong / Steady / Neutral / Depreciating / Weak).
-Stats are intentionally larger and bolder than other widgets.
+The arrow always renders with the app's signature blue-to-purple gradient.
+Direction is communicated through angle alone. A verdict sentence on the right
+explains what the data means in plain terms, similar to the Recommendation widget.
 """
 
 import math
 
-from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QWidget
-from PyQt6.QtGui import (
-    QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF,
-)
-from PyQt6.QtCore import Qt, QPointF, QRectF
+from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from vector.analytics import classify_direction, linear_regression_slope_percent
 from vector.widget_base import VectorWidget
-from vector.analytics import linear_regression_slope_percent, classify_direction
-from vector.constants import VOLATILITY_LOOKBACK_PERIODS
 
 _MUTED = '#8d98af'
+_GRAD_START = '#3A8DFF'
+_GRAD_END = '#B44AE6'
+
+# Plain-language verdicts per direction label.
+# Picked deterministically by slope magnitude so the text is stable across refreshes.
+_VERDICTS: dict[str, list[str]] = {
+    'Strong': [
+        "Your portfolio is building real momentum — the data projects continued appreciation if conditions hold.",
+        "Strong upward trajectory across your holdings — current momentum suggests further gains ahead.",
+        "Your investments are trending sharply upward — this is the profile of a portfolio in an active growth phase.",
+    ],
+    'Steady': [
+        "Your investments are growing at a sustainable pace — the trend is healthy and consistent.",
+        "A steady upward slope across your holdings — the kind of compounding that builds wealth quietly.",
+        "Your portfolio is appreciating steadily — no noise, no drama, just consistent forward movement.",
+    ],
+    'Neutral': [
+        "Your portfolio is moving sideways — no clear direction yet, but no warning signs either.",
+        "Sideways movement across your holdings — the market is coiling, a directional move may be building.",
+        "Your investments are holding flat — this is a waiting period, not a cause for concern.",
+    ],
+    'Depreciating': [
+        "Your investments are showing signs of decline — a downward trend is forming across your holdings.",
+        "The data shows a portfolio trending lower — the slope is negative and gradual losses are compounding.",
+        "Your portfolio is drifting downward — not a crisis, but a trend worth addressing before it deepens.",
+    ],
+    'Weak': [
+        "Your portfolio is under significant downward pressure — the data points to continued losses without a catalyst.",
+        "A strong downtrend is visible across your holdings — this is the highest-risk profile in the direction spectrum.",
+        "Your investments are declining sharply — the current trajectory demands attention and a clear response.",
+    ],
+}
 
 
-def _title_font(size: int, bold: bool = True) -> QFont:
+def _font(size: int, bold: bool = True) -> QFont:
     f = QFont()
     f.setPointSize(size)
     f.setBold(bold)
@@ -31,19 +59,19 @@ def _title_font(size: int, bold: bool = True) -> QFont:
 
 class _VectorArrow(QWidget):
     """
-    Horizontal arrow spanning the full width, tilted by angle degrees.
-    Positive angle = tilts upward; negative = downward.
+    Arrow spanning its width, tilted by angle degrees.
+    Always renders with the app's blue-to-purple gradient — direction
+    is read from the angle alone, not colour.
     """
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._angle = 0.0
-        self._color = QColor('#c7cedb')
         self.setMinimumHeight(60)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-    def set_state(self, angle: float, color: str) -> None:
-        self._angle = max(-55.0, min(55.0, angle))
-        self._color = QColor(color)
+    def set_angle(self, angle: float) -> None:
+        self._angle = max(-70.0, min(70.0, angle))
         self.update()
 
     def paintEvent(self, _event) -> None:  # noqa: N802
@@ -56,18 +84,14 @@ class _VectorArrow(QWidget):
         mid_y = h / 2.0
 
         angle_rad = math.radians(self._angle)
-        # Total vertical travel from start to end
-        dy = math.sin(angle_rad) * (h * 0.44)
+        dy = math.sin(angle_rad) * (h * 0.58)
 
-        # Arrow start at left-center, end at right offset by full dy
         x0 = pad_x
         y0 = mid_y
-        x_end = w - pad_x - 34.0   # leave room for arrowhead
-        y_end = mid_y - dy          # Qt y: up = negative
+        x_end = w - pad_x - 34.0
+        y_end = mid_y - dy
 
-        # Bezier control point: same y as start, 65% along x
-        # This makes the curve start nearly horizontal and steepen toward the end —
-        # matching the "0,0 → 1,1 → 2,3" acceleration shape.
+        # Control point: flat start, steepens toward end
         x_ctrl = x0 + (x_end - x0) * 0.65
         y_ctrl = y0
 
@@ -75,23 +99,22 @@ class _VectorArrow(QWidget):
         path.moveTo(x0, y0)
         path.quadTo(x_ctrl, y_ctrl, x_end, y_end)
 
-        # --- glow ---
-        glow_color = QColor(self._color)
-        glow_color.setAlpha(40)
-        painter.strokePath(path, QPen(glow_color, 20, Qt.PenStyle.SolidLine,
+        # --- glow (soft purple halo) ---
+        glow = QColor(_GRAD_END)
+        glow.setAlpha(35)
+        painter.strokePath(path, QPen(glow, 22, Qt.PenStyle.SolidLine,
                                       Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
 
-        # --- gradient shaft ---
-        grad = QLinearGradient(x0, y0, x_end, y_end)
-        fade = QColor(self._color)
-        fade.setAlpha(100)
-        grad.setColorAt(0.0, fade)
-        grad.setColorAt(1.0, self._color)
+        # --- gradient shaft: blue → purple, left to right ---
+        grad = QLinearGradient(x0, 0.0, x_end, 0.0)
+        c_start = QColor(_GRAD_START)
+        c_start.setAlpha(170)
+        grad.setColorAt(0.0, c_start)
+        grad.setColorAt(1.0, QColor(_GRAD_END))
         painter.strokePath(path, QPen(grad, 7, Qt.PenStyle.SolidLine,
                                       Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
 
-        # --- arrowhead aligned to end tangent ---
-        # Tangent at end of quadratic bezier = direction from control to end
+        # --- arrowhead aligned to the end tangent ---
         tdx = x_end - x_ctrl
         tdy = y_end - y_ctrl
         tlen = math.hypot(tdx, tdy) or 1.0
@@ -107,7 +130,7 @@ class _VectorArrow(QWidget):
             QPointF(base_cx + px * head_half, base_cy + py * head_half),
             QPointF(base_cx - px * head_half, base_cy - py * head_half),
         ])
-        painter.setBrush(self._color)
+        painter.setBrush(QColor(_GRAD_END))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawPolygon(poly)
 
@@ -127,33 +150,50 @@ class PortfolioVectorWidget(VectorWidget):
 
         # ── Title ────────────────────────────────────────────────────────
         title_lbl = QLabel('Portfolio Vector')
-        title_lbl.setFont(_title_font(12, bold=False))
+        title_lbl.setFont(_font(12, bold=False))
         title_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
         outer.addWidget(title_lbl)
 
         outer.addSpacing(2)
 
-        # ── Direction label (hero stat) ──────────────────────────────────
+        # ── Direction label + slope ──────────────────────────────────────
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(12)
         self._dir_lbl = QLabel('—')
-        self._dir_lbl.setFont(_title_font(580))
+        self._dir_lbl.setFont(_font(580))
         self._dir_lbl.setStyleSheet('border: none;')
-        outer.addWidget(self._dir_lbl)
-
-        # ── Slope value ──────────────────────────────────────────────────
+        stats_row.addWidget(self._dir_lbl)
         self._slope_lbl = QLabel('')
-        self._slope_lbl.setFont(_title_font(380))
+        self._slope_lbl.setFont(_font(380))
+        self._slope_lbl.setAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
         self._slope_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
-        outer.addWidget(self._slope_lbl)
+        stats_row.addWidget(self._slope_lbl)
+        stats_row.addStretch(1)
+        outer.addLayout(stats_row)
 
         outer.addSpacing(4)
 
-        # ── Arrow visualization ──────────────────────────────────────────
-        self._arrow = _VectorArrow()
-        outer.addWidget(self._arrow, stretch=1)
+        # ── Content row: arrow (left 60%) + verdict (right 40%) ──────────
+        content = QHBoxLayout()
+        content.setSpacing(24)
 
-        # ── Bottom row: sub-label ────────────────────────────────────────
+        self._arrow = _VectorArrow()
+        content.addWidget(self._arrow, stretch=6)
+
+        self._verdict_lbl = QLabel('')
+        self._verdict_lbl.setFont(_font(12, bold=False))
+        self._verdict_lbl.setWordWrap(True)
+        self._verdict_lbl.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        self._verdict_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
+        content.addWidget(self._verdict_lbl, stretch=4)
+
+        outer.addLayout(content, stretch=1)
+
+        outer.addSpacing(4)
+
+        # ── Sub-label ────────────────────────────────────────────────────
         self._sub_lbl = QLabel('6-month linear regression · equity-weighted')
-        self._sub_lbl.setFont(_title_font(9, bold=False))
+        self._sub_lbl.setFont(_font(9, bold=False))
         self._sub_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
         outer.addWidget(self._sub_lbl)
 
@@ -165,16 +205,17 @@ class PortfolioVectorWidget(VectorWidget):
         store = self._window.store
         refresh_interval = self._window.settings.get('refresh_interval', '5 min')
         thresholds = self._window.settings.get('direction_thresholds', {
-            'strong': 0.18, 'steady': 0.05,
-            'neutral_low': -0.05, 'neutral_high': 0.05,
-            'depreciating': -0.18,
+            'strong': 0.08, 'steady': 0.02,
+            'neutral_low': -0.02, 'neutral_high': 0.02,
+            'depreciating': -0.08,
         })
 
         if not positions:
             self._dir_lbl.setText('No Data')
             self._dir_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
             self._slope_lbl.setText('')
-            self._arrow.set_state(0.0, _MUTED)
+            self._arrow.set_angle(0.0)
+            self._verdict_lbl.setText('Add positions to see your portfolio direction.')
             return
 
         total_equity = sum(p.get('equity', 0) for p in positions)
@@ -193,8 +234,13 @@ class PortfolioVectorWidget(VectorWidget):
         direction_label, color, arrow_angle = classify_direction(weighted_slope, thresholds)
         sign = '+' if weighted_slope >= 0 else ''
 
+        # Pick verdict deterministically — stable across refreshes for the same portfolio
+        sentences = _VERDICTS.get(direction_label, _VERDICTS['Neutral'])
+        verdict = sentences[int(abs(weighted_slope) * 1000) % len(sentences)]
+
         self._dir_lbl.setText(direction_label)
         self._dir_lbl.setStyleSheet(f'color: {color}; border: none;')
         self._slope_lbl.setText(f'{sign}{weighted_slope:.3f}%')
-        self._slope_lbl.setStyleSheet(f'color: {color}; border: none;')
-        self._arrow.set_state(arrow_angle, color)
+        self._slope_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
+        self._arrow.set_angle(arrow_angle)
+        self._verdict_lbl.setText(verdict)

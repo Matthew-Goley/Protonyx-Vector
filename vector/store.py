@@ -198,7 +198,7 @@ class DataStore:
             'ticker': clean,
             'price': price,
             'name': info.get('shortName') or clean,
-            'sector': info.get('sector') or info.get('industryDisp') or 'Unknown',
+            'sector': _resolve_sector(info),
         }
 
     # ------------------------------------------------------------------
@@ -272,7 +272,7 @@ class DataStore:
             entry['meta'] = {
                 'name':        info.get('shortName') or ticker,
                 'long_name':   info.get('longName') or info.get('shortName') or ticker,
-                'sector':      info.get('sector') or info.get('industryDisp') or 'Unknown',
+                'sector':      _resolve_sector(info),
                 'industry':    info.get('industry') or info.get('industryDisp'),
                 'exchange':    info.get('exchange') or _ss(fi.get('exchange')),
                 'currency':    info.get('currency') or _ss(fi.get('currency')),
@@ -555,6 +555,16 @@ class DataStore:
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
+
+def _resolve_sector(info: dict[str, Any]) -> str:
+    """
+    Return a human-readable sector string from a yfinance info dict.
+    ETFs don't have a sector field — detect them via quoteType and label them 'ETF'.
+    """
+    if (info.get('quoteType') or '').upper() == 'ETF':
+        return 'ETF'
+    return info.get('sector') or info.get('industryDisp') or 'Unknown'
+
 
 def _get_price(instrument: yf.Ticker) -> float | None:
     """Try multiple yfinance price sources. Returns None if all fail."""

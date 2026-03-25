@@ -19,11 +19,11 @@ DEFAULT_SETTINGS = {
     'date_format': 'MM/DD/YYYY',
     'refresh_interval': '5 min',
     'direction_thresholds': {
-        'strong': 0.18,
-        'steady': 0.05,
-        'neutral_low': -0.05,
-        'neutral_high': 0.05,
-        'depreciating': -0.18,
+        'strong': 0.08,
+        'steady': 0.02,
+        'neutral_low': -0.02,
+        'neutral_high': 0.02,
+        'depreciating': -0.08,
     },
     'volatility': {
         'lookback': '6 months',
