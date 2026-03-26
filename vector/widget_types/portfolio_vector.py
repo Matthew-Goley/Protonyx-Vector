@@ -16,8 +16,10 @@ from vector.analytics import classify_direction, linear_regression_slope_percent
 from vector.widget_base import VectorWidget
 
 _MUTED = '#8d98af'
-_GRAD_START = '#3A8DFF'
-_GRAD_END = '#B44AE6'
+_GRAD_START = '#34a7ff'
+_GRAD_MID1   = '#a256f6'
+_GRAD_MID2   = '#e34ec6'
+_GRAD_END   = '#fd8a83'
 
 # Plain-language verdicts per direction label.
 # Picked deterministically by slope magnitude so the text is stable across refreshes.
@@ -107,11 +109,13 @@ class _VectorArrow(QWidget):
         painter.strokePath(path, QPen(glow, 22, Qt.PenStyle.SolidLine,
                                       Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
 
-        # --- gradient shaft: blue → purple, left to right ---
+        # --- gradient shaft: 4-key gradient, left to right ---
         grad = QLinearGradient(x0, 0.0, x_end, 0.0)
         c_start = QColor(_GRAD_START)
         c_start.setAlpha(170)
         grad.setColorAt(0.0, c_start)
+        grad.setColorAt(0.33, QColor(_GRAD_MID1))
+        grad.setColorAt(0.66, QColor(_GRAD_MID2))
         grad.setColorAt(1.0, QColor(_GRAD_END))
         painter.strokePath(path, QPen(grad, 7, Qt.PenStyle.SolidLine,
                                       Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
@@ -153,7 +157,7 @@ class PortfolioVectorWidget(VectorWidget):
         # ── Title ────────────────────────────────────────────────────────
         title_lbl = QLabel('Portfolio Vector')
         title_lbl.setFont(_font(16, bold=True))
-        title_lbl.setStyleSheet('color: #e7ebf3; border: none;')
+        title_lbl.setStyleSheet('color: #e7ebf3; font-size: 16pt; border: none;')
         outer.addWidget(title_lbl)
 
         outer.addSpacing(2)
@@ -162,13 +166,13 @@ class PortfolioVectorWidget(VectorWidget):
         stats_row = QHBoxLayout()
         stats_row.setSpacing(12)
         self._dir_lbl = QLabel('—')
-        self._dir_lbl.setFont(_font(580))
-        self._dir_lbl.setStyleSheet('border: none;')
+        self._dir_lbl.setFont(_font(24))
+        self._dir_lbl.setStyleSheet('font-size: 24pt; border: none;')
         stats_row.addWidget(self._dir_lbl)
         self._slope_lbl = QLabel('')
-        self._slope_lbl.setFont(_font(380))
+        self._slope_lbl.setFont(_font(24))
         self._slope_lbl.setAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
-        self._slope_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
+        self._slope_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 24pt; border: none;')
         stats_row.addWidget(self._slope_lbl)
         stats_row.addStretch(1)
         outer.addLayout(stats_row)
@@ -193,7 +197,7 @@ class PortfolioVectorWidget(VectorWidget):
         self._verdict_lbl.setFont(_font(12, bold=False))
         self._verdict_lbl.setWordWrap(True)
         self._verdict_lbl.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-        self._verdict_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
+        self._verdict_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 12pt; border: none;')
         content.addWidget(self._verdict_lbl, stretch=4)
 
         outer.addLayout(content, stretch=1)
@@ -203,7 +207,7 @@ class PortfolioVectorWidget(VectorWidget):
         # ── Sub-label ────────────────────────────────────────────────────
         self._sub_lbl = QLabel('6-month linear regression · equity-weighted')
         self._sub_lbl.setFont(_font(9, bold=False))
-        self._sub_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
+        self._sub_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 9pt; border: none;')
         outer.addWidget(self._sub_lbl)
 
     def refresh(self) -> None:
@@ -221,7 +225,7 @@ class PortfolioVectorWidget(VectorWidget):
 
         if not positions:
             self._dir_lbl.setText('No Data')
-            self._dir_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
+            self._dir_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 24pt; border: none;')
             self._slope_lbl.setText('')
             self._arrow.set_angle(0.0)
             self._verdict_lbl.setText('Add positions to see your portfolio direction.')
@@ -248,8 +252,8 @@ class PortfolioVectorWidget(VectorWidget):
         verdict = sentences[int(abs(weighted_slope) * 1000) % len(sentences)]
 
         self._dir_lbl.setText(direction_label)
-        self._dir_lbl.setStyleSheet(f'color: {color}; border: none;')
+        self._dir_lbl.setStyleSheet(f'color: {color}; font-size: 24pt; border: none;')
         self._slope_lbl.setText(f'{sign}{weighted_slope:.3f}%')
-        self._slope_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
+        self._slope_lbl.setStyleSheet(f'color: {color}; font-size: 24pt; border: none;')
         self._arrow.set_angle(arrow_angle)
         self._verdict_lbl.setText(verdict)

@@ -96,16 +96,16 @@ class TotalEquityWidget(VectorWidget):
         title_lbl = QLabel('Total Equity')
         tf = QFont(); tf.setPointSize(16); tf.setBold(True)
         title_lbl.setFont(tf)
-        title_lbl.setStyleSheet('color: #e7ebf3; border: none;')
+        title_lbl.setStyleSheet('color: #e7ebf3; font-size: 16pt; border: none;')
         layout.addWidget(title_lbl)
 
         layout.addSpacing(8)
 
         # ── Hero value ───────────────────────────────────────────────────
         self._value_lbl = QLabel('—')
-        vf = QFont(); vf.setPointSize(30); vf.setBold(True)
+        vf = QFont(); vf.setPointSize(15); vf.setBold(True)
         self._value_lbl.setFont(vf)
-        self._value_lbl.setStyleSheet('border: none;')
+        self._value_lbl.setStyleSheet('font-size: 15pt; border: none;')
         layout.addWidget(self._value_lbl)
 
         layout.addSpacing(5)
@@ -118,14 +118,14 @@ class TotalEquityWidget(VectorWidget):
         self._change_lbl = QLabel('')
         cf = QFont(); cf.setPointSize(11); cf.setBold(True)
         self._change_lbl.setFont(cf)
-        self._change_lbl.setStyleSheet(f'color: {_MUTED}; border: none;')
+        self._change_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11pt; border: none;')
         row.addWidget(self._change_lbl)
 
         row.addStretch(1)
 
         self._period_lbl = QLabel('5-day change')
         self._period_lbl.setStyleSheet(
-            f'color: {_MUTED}; font-size: 10px; border: none;'
+            f'color: {_MUTED}; font-size: 10pt; border: none;'
         )
         self._period_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(self._period_lbl)
@@ -149,7 +149,7 @@ class TotalEquityWidget(VectorWidget):
 
         if not positions:
             self._value_lbl.setText(fmt(0))
-            self._value_lbl.setStyleSheet('border: none;')
+            self._value_lbl.setStyleSheet('font-size: 15pt; border: none;')
             self._change_lbl.setText('—')
             self._chart.set_values([])
             return
@@ -186,9 +186,9 @@ class TotalEquityWidget(VectorWidget):
         sign   = '+' if change >= 0 else ''
 
         self._value_lbl.setText(fmt(last if daily_totals else current_equity))
-        self._value_lbl.setStyleSheet(f'color: {color}; border: none;')
+        self._value_lbl.setStyleSheet(f'color: {color}; font-size: 15pt; border: none;')
 
         self._change_lbl.setText(f'{sign}{fmt(change)}  {sign}{pct:.2f}%')
-        self._change_lbl.setStyleSheet(f'color: {color}; font-weight: 700; border: none;')
+        self._change_lbl.setStyleSheet(f'color: {color}; font-size: 11pt; font-weight: 700; border: none;')
 
         self._chart.set_values(daily_totals if daily_totals else [current_equity], color)

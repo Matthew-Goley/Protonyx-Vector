@@ -9,9 +9,10 @@ from vector.recommendations import generate_recommendation
 
 _MUTED      = '#8d98af'
 _BG         = '#121828'
-_GRAD_START = '#3A8DFF'
-_GRAD_MID   = '#7B6EF0'
-_GRAD_END   = '#B44AE6'
+_GRAD_START = '#34a7ff'
+_GRAD_MID   = '#a256f6'
+_GRAD_MID2  = '#e34ec6'
+_GRAD_END   = '#fd8a83'
 
 # Sector names → mid gradient
 _SECTORS = {
@@ -51,11 +52,11 @@ def _apply_to_text(s: str, fn) -> str:
 def _highlight_html(text: str) -> str:
     """
     Return HTML where important parts are gradient-colored:
-      - ticker symbols (ALL-CAPS 2-5 letters)  → blue  #3A8DFF
-      - known sector names                      → mid   #7B6EF0
-      - financial / portfolio terms             → mid   #7B6EF0
-      - action phrases ("next deposit" etc.)    → blue  #3A8DFF
-      - numbers / percentages / $ amounts       → purple #B44AE6
+      - ticker symbols (ALL-CAPS 2-5 letters)  → blue  #34a7ff
+      - known sector names                      → mid   #a256f6
+      - financial / portfolio terms             → mid   #a256f6
+      - action phrases ("next deposit" etc.)    → blue  #34a7ff
+      - numbers / percentages / $ amounts       → purple #fd8a83
       - everything else                         → white #e7ebf3
     """
     s = (text
@@ -124,6 +125,8 @@ class _AccentFrame(QFrame):
         painter.drawRoundedRect(QRectF(self.rect()), 12, 12)
         bar_grad = QLinearGradient(0, 16, 0, h - 16)
         bar_grad.setColorAt(0.0, QColor(_GRAD_START))
+        bar_grad.setColorAt(0.33, QColor(_GRAD_MID))
+        bar_grad.setColorAt(0.66, QColor(_GRAD_MID2))
         bar_grad.setColorAt(1.0, QColor(_GRAD_END))
         painter.setBrush(bar_grad)
         painter.drawRoundedRect(QRectF(0, 16, 4, h - 32), 2, 2)
@@ -131,6 +134,8 @@ class _AccentFrame(QFrame):
         c0 = QColor(_GRAD_START); c0.setAlpha(80)
         c1 = QColor(_GRAD_END);   c1.setAlpha(80)
         border_grad.setColorAt(0.0, c0)
+        border_grad.setColorAt(0.33, QColor(_GRAD_MID))
+        border_grad.setColorAt(0.66, QColor(_GRAD_MID2))
         border_grad.setColorAt(1.0, c1)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(border_grad, 1))
@@ -162,42 +167,48 @@ class RecommendationWidget(VectorWidget):
 
         title_lbl = QLabel('Recommendation')
         title_lbl.setFont(_font(16, bold=True))
-        title_lbl.setStyleSheet('color: #e7ebf3; border: none;')
+        title_lbl.setStyleSheet('color: #e7ebf3; font-size: 16pt; border: none;')
         card_layout.addWidget(title_lbl)
 
         self._text_lbl = QLabel('')
         self._text_lbl.setWordWrap(True)
         self._text_lbl.setTextFormat(Qt.TextFormat.RichText)
-        self._text_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self._text_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._text_lbl.setStyleSheet(
-            'border: none; color: #e7ebf3; font-size: 20pt; font-weight: 700;'
+            'border: none; color: #e7ebf3; font-size: 18pt; font-weight: 700;'
         )
-        card_layout.addStretch(1)
-        card_layout.addWidget(self._text_lbl)
-        card_layout.addStretch(1)
+        card_layout.addWidget(self._text_lbl, stretch=1)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._card)
 
-    def _fit_pt(self, text: str) -> int:
-        """Binary-search the largest pt size where wrapped text fits the label area."""
-        # Use label dimensions if laid out, else estimate from card minus chrome
+    def _available_size(self) -> tuple[int, int]:
+        """Return (width, height) available for text, using the best source."""
+        # Prefer actual label geometry — it's authoritative after layout
         w = self._text_lbl.width()
         h = self._text_lbl.height()
-        if w < 20:
-            w = max(self._card.width() - 56, 200)
-        if h < 20:
-            h = max(self._card.height() - 90, 60)  # subtract title + margins
+        if w >= 20 and h >= 20:
+            return w, h
+        # Fallback: estimate from card minus chrome
+        cw = max(self._card.width(), self.width())
+        ch = max(self._card.height(), self.height())
+        # 28+28 horizontal margins, 24+24 vertical margins + ~30 title + 10 spacing
+        return max(cw - 56, 200), max(ch - 88, 60)
 
-        for pt in range(22, 9, -1):
+    def _fit_pt(self, text: str) -> int:
+        """Find the largest pt size where wrapped text fully fits with no clipping."""
+        w, h = self._available_size()
+
+        for pt in range(28, 9, -1):
             fm = QFontMetrics(_font(pt))
             br = fm.boundingRect(
                 QRect(0, 0, w, 10000),
                 Qt.TextFlag.TextWordWrap,
                 text,
             )
-            if br.height() <= h:
+            # Use 90% of available height to guarantee no clipping
+            if br.height() <= int(h * 0.9):
                 return pt
         return 10
 
@@ -206,33 +217,83 @@ class RecommendationWidget(VectorWidget):
             f'border: none; color: #e7ebf3; font-size: {pt}pt; font-weight: 700;'
         )
 
-    def resizeEvent(self, event) -> None:  # noqa: N802
-        self._card.setGeometry(self.rect())
-        # Re-fit text if not mid-animation
-        if self._tw_plain and not self._tw_timer.isActive():
-            pt = self._fit_pt(self._tw_plain)
-            self._apply_font(pt)
+    def _refit(self) -> None:
+        """Recalculate font size and update displayed text."""
+        if not self._tw_plain:
+            return
+        pt = self._fit_pt(self._tw_plain)
+        self._apply_font(pt)
+        if not self._tw_timer.isActive():
             self._text_lbl.setTextFormat(Qt.TextFormat.RichText)
             self._text_lbl.setText(self._tw_html)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        self._card.setGeometry(self.rect())
+        self._refit()
         super().resizeEvent(event)
 
+    def showEvent(self, event) -> None:  # noqa: N802
+        """Refit on first show — layout is now finalized so dimensions are accurate."""
+        super().showEvent(event)
+        self._card.setGeometry(self.rect())
+        QTimer.singleShot(0, self._refit)
+
     def _apply_style(self, edit: bool) -> None:
-        border = '#3A8DFF' if edit else 'transparent'
+        border = '#34a7ff' if edit else 'transparent'
         self.setStyleSheet(
             f'background: transparent; border: 2px solid {border}; border-radius: 12px;'
         )
 
+    @staticmethod
+    def _truncate_html(html: str, visible_chars: int) -> str:
+        """Truncate HTML to show only the first N visible characters, preserving tags."""
+        result: list[str] = []
+        shown = 0
+        i = 0
+        open_tags: list[str] = []
+        while i < len(html) and shown < visible_chars:
+            if html[i] == '<':
+                end = html.find('>', i)
+                if end == -1:
+                    break
+                tag = html[i:end + 1]
+                result.append(tag)
+                # Track open/close tags for proper closing
+                if not tag.startswith('</'):
+                    m = re.match(r'<(\w+)', tag)
+                    if m:
+                        open_tags.append(m.group(1))
+                else:
+                    if open_tags:
+                        open_tags.pop()
+                i = end + 1
+            elif html[i] == '&':
+                # HTML entity — counts as one visible char
+                end = html.find(';', i)
+                if end == -1:
+                    result.append(html[i])
+                    shown += 1
+                    i += 1
+                else:
+                    result.append(html[i:end + 1])
+                    shown += 1
+                    i = end + 1
+            else:
+                result.append(html[i])
+                shown += 1
+                i += 1
+        # Close any open tags
+        for tag in reversed(open_tags):
+            result.append(f'</{tag}>')
+        return ''.join(result)
+
     def _tw_step(self) -> None:
         self._tw_pos += 1
-        self._text_lbl.setTextFormat(Qt.TextFormat.PlainText)
-        self._text_lbl.setText(self._tw_plain[:self._tw_pos])
+        truncated = self._truncate_html(self._tw_html, self._tw_pos)
+        self._text_lbl.setTextFormat(Qt.TextFormat.RichText)
+        self._text_lbl.setText(truncated)
         if self._tw_pos >= len(self._tw_plain):
             self._tw_timer.stop()
-            # Snap to highlighted HTML at fitted size
-            pt = self._fit_pt(self._tw_plain)
-            self._apply_font(pt)
-            self._text_lbl.setTextFormat(Qt.TextFormat.RichText)
-            self._text_lbl.setText(self._tw_html)
 
     def _start_typewrite(self, plain: str) -> None:
         self._tw_timer.stop()
@@ -240,7 +301,7 @@ class RecommendationWidget(VectorWidget):
         self._tw_html  = _highlight_html(plain)
         self._tw_pos   = 0
         pt = self._fit_pt(plain)
-        self._text_lbl.setTextFormat(Qt.TextFormat.PlainText)
+        self._text_lbl.setTextFormat(Qt.TextFormat.RichText)
         self._apply_font(pt)
         self._text_lbl.setText('')
         self._tw_timer.start()

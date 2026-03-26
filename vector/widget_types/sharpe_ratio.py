@@ -62,7 +62,7 @@ class _TierRow(QLabel):
         super().__init__(parent)
         self._tier = tier
         self._desc = desc
-        self.setStyleSheet('border: none; font-size: 12px;')
+        self.setStyleSheet('border: none; font-size: 12pt;')
         self.setTextFormat(Qt.TextFormat.RichText)
         self.set_active(False)
 
@@ -71,7 +71,7 @@ class _TierRow(QLabel):
         weight = '700' if active else '400'
         self.setText(
             f'<span style="color:{color};font-weight:{weight};">{self._tier}</span>'
-            f'<span style="color:{_MUTED};font-size:11px;"> — {self._desc}</span>'
+            f'<span style="color:{_MUTED};font-size:11pt;"> — {self._desc}</span>'
         )
 
 
@@ -91,12 +91,12 @@ class SharpeRatioWidget(VectorWidget):
         # Header
         header = QHBoxLayout()
         title_lbl = QLabel('Sharpe Ratio')
-        title_lbl.setFont(_title_font(22))
-        title_lbl.setStyleSheet('color: #e7ebf3; border: none;')
+        title_lbl.setFont(_title_font(16))
+        title_lbl.setStyleSheet('color: #e7ebf3; font-size: 16pt; border: none;')
         header.addWidget(title_lbl)
         header.addStretch(1)
         self._period_lbl = QLabel('')
-        self._period_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10px; border: none;')
+        self._period_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10pt; border: none;')
         header.addWidget(self._period_lbl)
         layout.addLayout(header)
 
@@ -104,18 +104,18 @@ class SharpeRatioWidget(VectorWidget):
         score_row = QHBoxLayout()
         self._score_lbl = QLabel('—')
         self._score_lbl.setFont(_title_font(22))
-        self._score_lbl.setStyleSheet('border: none;')
+        self._score_lbl.setStyleSheet('font-size: 22pt; border: none;')
         score_row.addWidget(self._score_lbl)
 
         self._label_lbl = QLabel('')
-        self._label_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 13px; font-weight: 700; border: none;')
+        self._label_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 13pt; font-weight: 700; border: none;')
         self._label_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
         score_row.addWidget(self._label_lbl)
         score_row.addStretch(1)
         layout.addLayout(score_row)
 
         self._rf_lbl = QLabel(f'rf = {_RISK_FREE_RATE * 100:.1f}%')
-        self._rf_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10px; border: none;')
+        self._rf_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10pt; border: none;')
         layout.addWidget(self._rf_lbl)
 
         layout.addSpacing(8)
@@ -168,10 +168,10 @@ class SharpeRatioWidget(VectorWidget):
         label = _sharpe_label(s)
 
         self._score_lbl.setText(f'{s:.2f}')
-        self._score_lbl.setStyleSheet(f'color: {color}; border: none;')
+        self._score_lbl.setStyleSheet(f'color: {color}; font-size: 22pt; border: none;')
         self._label_lbl.setText(label)
         self._label_lbl.setStyleSheet(
-            f'color: {color}; font-size: 13px; font-weight: 700; border: none;'
+            f'color: {color}; font-size: 13pt; font-weight: 700; border: none;'
         )
 
         # Highlight the active tier

@@ -7,7 +7,7 @@ import numpy as np
 
 
 DIRECTION_STATES = [
-    ('Strong', '#3A8DFF'),
+    ('Strong', '#34a7ff'),
     ('Steady', '#54BFFF'),
     ('Neutral', '#c7cedb'),
     ('Depreciating', '#FF6B2B'),
@@ -111,9 +111,9 @@ def classify_direction(value: float, thresholds: dict[str, float]) -> tuple[str,
 
 def classify_volatility(score: int, low_cutoff: int, high_cutoff: int) -> tuple[str, str]:
     if score < low_cutoff:
-        return 'Low Volatility', '#3A8DFF'
+        return 'Low Volatility', '#34a7ff'
     if score <= high_cutoff:
-        return 'Moderate', '#E91E8C'
+        return 'Moderate', '#e34ec6'
     return 'High Risk', '#ff5d5d'
 
 

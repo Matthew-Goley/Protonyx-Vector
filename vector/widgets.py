@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 CARD_BACKGROUND = '#161b26'
 BORDER_COLOR = '#2a3142'
 TEXT_MUTED = '#7f8aa2'
-ACCENT_COLORS = ['#3A8DFF', '#8B3FCF', '#E91E8C', '#FF6B2B', '#54BFFF', '#B44AE6']
+ACCENT_COLORS = ['#34a7ff', '#a256f6', '#fd8a83', '#FF6B2B', '#54BFFF', '#e34ec6']
 
 
 class CardFrame(QFrame):
@@ -61,8 +61,10 @@ class GradientBorderFrame(QFrame):
         painter.fillPath(bg_path, bg)
 
         grad = QLinearGradient(rect.topLeft(), rect.topRight())
-        grad.setColorAt(0.0, QColor('#3A8DFF'))
-        grad.setColorAt(1.0, QColor('#B44AE6'))
+        grad.setColorAt(0.0, QColor('#34a7ff'))
+        grad.setColorAt(0.33, QColor('#a256f6'))
+        grad.setColorAt(0.66, QColor('#e34ec6'))
+        grad.setColorAt(1.0, QColor('#fd8a83'))
         pen = QPen(QBrush(grad), bw)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
@@ -85,8 +87,10 @@ class GradientLine(QWidget):
         painter = QPainter(self)
         rect = QRectF(self.rect())
         grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-        grad.setColorAt(0.0, QColor('#3A8DFF'))
-        grad.setColorAt(1.0, QColor('#B44AE6'))
+        grad.setColorAt(0.0, QColor('#34a7ff'))
+        grad.setColorAt(0.33, QColor('#a256f6'))
+        grad.setColorAt(0.66, QColor('#e34ec6'))
+        grad.setColorAt(1.0, QColor('#fd8a83'))
         painter.fillRect(rect, QBrush(grad))
         painter.end()
 
@@ -95,7 +99,7 @@ class ArrowIndicator(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._angle = 0.0
-        self._color = QColor('#3A8DFF')
+        self._color = QColor('#34a7ff')
         self.setMinimumHeight(180)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -124,7 +128,7 @@ class ArrowIndicator(QWidget):
 
 
 class SparklineWidget(QWidget):
-    def __init__(self, values: Iterable[float] | None = None, color: str = '#3A8DFF', parent: QWidget | None = None) -> None:
+    def __init__(self, values: Iterable[float] | None = None, color: str = '#34a7ff', parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._values = list(values or [])
         self._color = QColor(color)
@@ -218,6 +222,7 @@ class EmptyState(QWidget):
         title_font.setPointSize(16)
         title_font.setBold(True)
         title_label.setFont(title_font)
+        title_label.setStyleSheet('font-size: 16pt;')
         subtitle_label = QLabel(subtitle)
         subtitle_label.setWordWrap(True)
         subtitle_label.setMinimumHeight(40)
@@ -358,8 +363,9 @@ class GradientLabel(QWidget):
         metrics = painter.fontMetrics()
         text_width = metrics.horizontalAdvance(self._text)
         gradient = QLinearGradient(0, 0, text_width, 0)
-        gradient.setColorAt(0.0, QColor('#3A8DFF'))
-        gradient.setColorAt(0.45, QColor('#B44AE6'))
-        gradient.setColorAt(1.0, QColor('#E91E8C'))
+        gradient.setColorAt(0.0, QColor('#34a7ff'))
+        gradient.setColorAt(0.33, QColor('#a256f6'))
+        gradient.setColorAt(0.66, QColor('#e34ec6'))
+        gradient.setColorAt(1.0, QColor('#fd8a83'))
         painter.setPen(QPen(gradient, 0))
         painter.drawText(0, metrics.ascent(), self._text)

@@ -55,7 +55,7 @@ QPushButton {
 QPushButton:hover { background: #202b41; }
 QPushButton:pressed { background: #121929; }
 QPushButton[accent='true'] {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3A8DFF, stop:1 #B44AE6);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #34a7ff, stop:0.33 #a256f6, stop:0.66 #e34ec6, stop:1 #fd8a83);
     color: #ffffff;
     border: none;
     font-weight: 600;
@@ -145,7 +145,7 @@ QFrame#vectorWidget {
     border: 1px solid #2c364a;
     border-radius: 12px;
 }
-QFrame#vectorWidget[editing="true"] { border-color: #3A8DFF; }
+QFrame#vectorWidget[editing="true"] { border-color: #34a7ff; }
 QPushButton#navButton {
     background: transparent;
     border: 1px solid transparent;
@@ -175,7 +175,7 @@ QPushButton {
     padding: 10px 16px;
 }
 QPushButton[accent='true'] {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3A8DFF, stop:1 #B44AE6);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #34a7ff, stop:0.33 #a256f6, stop:0.66 #e34ec6, stop:1 #fd8a83);
     color: #ffffff;
     border: none;
     font-weight: 600;
@@ -261,7 +261,7 @@ QFrame#vectorWidget {
     border: 1px solid #ccd5e5;
     border-radius: 12px;
 }
-QFrame#vectorWidget[editing="true"] { border-color: #3A8DFF; }
+QFrame#vectorWidget[editing="true"] { border-color: #34a7ff; }
 QPushButton#navButton {
     background: transparent;
     border: 1px solid transparent;
@@ -294,6 +294,7 @@ class PositionDialog(QDialog):
         title_font.setPointSize(15)
         title_font.setBold(True)
         title.setFont(title_font)
+        title.setStyleSheet('font-size: 15pt;')
         subtitle = QLabel('Vector will validate the ticker with Yahoo Finance before saving it.')
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet('color: #8d98af;')
@@ -373,6 +374,7 @@ class PositionCard(CardFrame):
         ticker_font.setPointSize(18)
         ticker_font.setBold(True)
         ticker.setFont(ticker_font)
+        ticker.setStyleSheet('font-size: 18pt;')
         layout.addWidget(ticker)
         for label, value in (
             ('Shares', f"{position['shares']:.4f}".rstrip('0').rstrip('.')),
@@ -427,6 +429,7 @@ class OnboardingPage(QWidget):
         title_font.setPointSize(26)
         title_font.setBold(True)
         title.setFont(title_font)
+        title.setStyleSheet('font-size: 26pt;')
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle = QLabel(
             f'{COMPANY_NAME} {APP_NAME} needs your first positions to begin tracking portfolio analytics. Add one or more holdings to get started.'
@@ -739,21 +742,22 @@ class _PickerCard(QFrame):
         name_font.setBold(True)
         name_font.setPointSize(11)
         name_lbl.setFont(name_font)
+        name_lbl.setStyleSheet('font-size: 11pt;')
         name_lbl.setFixedWidth(160)
         name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_lbl = QLabel(description)
         desc_lbl.setWordWrap(True)
-        desc_lbl.setStyleSheet('color: #8d98af; font-size: 11px;')
+        desc_lbl.setStyleSheet('color: #8d98af; font-size: 11pt;')
         layout.addWidget(name_lbl)
         layout.addWidget(desc_lbl, stretch=1)
         self._set_style(False)
 
     def _set_style(self, hovered: bool) -> None:
         if self._featured:
-            border = '#3A8DFF' if not hovered else '#6aaaff'
+            border = '#34a7ff' if not hovered else '#6aaaff'
             bg = '#131e35' if hovered else '#0f1a2e'
         else:
-            border = '#3A8DFF' if hovered else '#2c364a'
+            border = '#34a7ff' if hovered else '#2c364a'
             bg = '#151e30' if hovered else '#121828'
         self.setStyleSheet(f"""
             QFrame {{
@@ -801,6 +805,7 @@ class WidgetPickerDialog(QDialog):
         title_font.setPointSize(15)
         title_font.setBold(True)
         title.setFont(title_font)
+        title.setStyleSheet('font-size: 15pt;')
         layout.addWidget(title)
         sub = QLabel('Select the widget you want to add to your dashboard.')
         sub.setStyleSheet('color: #8d98af;')
@@ -834,9 +839,9 @@ def _circle_btn_style(font_size: int, active: bool = False) -> str:
         return f"""
             QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #5aa3ff, stop:1 #c96df0);
+                    stop:0 #5cc0ff, stop:0.33 #b87af8, stop:0.66 #ea6ed4, stop:1 #fea69c);
                 color: #ffffff;
-                font-size: {font_size}px;
+                font-size: {font_size}pt;
                 font-weight: 700;
                 border: 2px solid rgba(255,255,255,0.45);
                 border-radius: 32px;
@@ -845,20 +850,20 @@ def _circle_btn_style(font_size: int, active: bool = False) -> str:
     return f"""
         QPushButton {{
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                stop:0 #3A8DFF, stop:1 #B44AE6);
+                stop:0 #34a7ff, stop:0.33 #a256f6, stop:0.66 #e34ec6, stop:1 #fd8a83);
             color: #ffffff;
-            font-size: {font_size}px;
+            font-size: {font_size}pt;
             font-weight: 300;
             border: none;
             border-radius: 32px;
         }}
         QPushButton:hover {{
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                stop:0 #5aa3ff, stop:1 #c96df0);
+                stop:0 #5cc0ff, stop:0.33 #b87af8, stop:0.66 #ea6ed4, stop:1 #fea69c);
         }}
         QPushButton:pressed {{
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                stop:0 #2a7aee, stop:1 #9a3ad4);
+                stop:0 #2a8fee, stop:0.33 #8a3fd6, stop:0.66 #c63aaa, stop:1 #d9705f);
         }}
     """
 
@@ -969,10 +974,10 @@ class ProfilePage(QWidget):
         hero_layout = QHBoxLayout(hero)
         hero_layout.setContentsMargins(24, 24, 24, 24)
         avatar = QLabel('👤')
-        avatar.setStyleSheet('font-size: 42px;')
+        avatar.setStyleSheet('font-size: 42pt;')
         text_container = QVBoxLayout()
         name = QLabel('Guest User')
-        name.setStyleSheet('font-size: 24px; font-weight: 700;')
+        name.setStyleSheet('font-size: 24pt; font-weight: 700;')
         text_container.addWidget(QLabel('Guest Profile'))
         text_container.addWidget(name)
         text_container.addWidget(self.member_since)
@@ -980,7 +985,7 @@ class ProfilePage(QWidget):
         hero_layout.addLayout(text_container)
         hero_layout.addStretch(1)
         hero_layout.addWidget(self.total_value)
-        self.total_value.setStyleSheet('font-size: 30px; font-weight: 700;')
+        self.total_value.setStyleSheet('font-size: 30pt; font-weight: 700;')
         layout.addWidget(hero)
         layout.addStretch(1)
 
@@ -1055,7 +1060,7 @@ class _AccordionSection(CardFrame):
         header_row.setSpacing(12)
 
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet('font-size: 16px; font-weight: 700; background: transparent; border: none;')
+        title_lbl.setStyleSheet('font-size: 16pt; font-weight: 700; background: transparent; border: none;')
         self._chevron = _AnimatedChevron()
 
         header_row.addWidget(title_lbl)
@@ -1129,7 +1134,7 @@ class SettingsPage(QWidget):
         layout = QVBoxLayout(card)
         layout.setContentsMargins(20, 20, 20, 20)
         heading = QLabel(title)
-        heading.setStyleSheet('font-size: 16px; font-weight: 700;')
+        heading.setStyleSheet('font-size: 16pt; font-weight: 700;')
         layout.addWidget(heading)
         form = QFormLayout()
         form.setSpacing(12)
@@ -1334,7 +1339,7 @@ class MainShell(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(20, 18, 20, 18)
         text_col = QVBoxLayout()
-        self.header_title.setStyleSheet('font-size: 22px; font-weight: 700;')
+        self.header_title.setStyleSheet('font-size: 22pt; font-weight: 700;')
         self.header_breadcrumb.setObjectName('headerBreadcrumb')
         text_col.addWidget(self.header_title)
         text_col.addWidget(self.header_breadcrumb)
@@ -1431,7 +1436,7 @@ class VectorMainWindow(QMainWindow):
             icon_label.setPixmap(self.create_placeholder_logo(size))
             layout.addWidget(icon_label)
             text = QLabel(APP_NAME)
-            text.setStyleSheet('font-size: 20px; font-weight: 700;')
+            text.setStyleSheet('font-size: 20pt; font-weight: 700;')
             layout.addWidget(text)
         wrapper.setFixedHeight(size + 4)
         return wrapper
@@ -1449,7 +1454,7 @@ class VectorMainWindow(QMainWindow):
         path.moveTo(size * 0.22, size * 0.24)
         path.lineTo(size * 0.50, size * 0.76)
         path.lineTo(size * 0.78, size * 0.24)
-        accent_pen = QPen(QColor('#3A8DFF'))
+        accent_pen = QPen(QColor('#34a7ff'))
         accent_pen.setWidth(max(3, size // 12))
         accent_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         accent_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)

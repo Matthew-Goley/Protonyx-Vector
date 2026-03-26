@@ -31,24 +31,28 @@ class _PositionRow(QFrame):
         id_col.setSpacing(2)
         ticker_lbl = QLabel(pos.get('ticker', ''))
         ticker_lbl.setFont(_title_font(13))
-        ticker_lbl.setStyleSheet('border: none;')
+        ticker_lbl.setStyleSheet('font-size: 13pt; border: none;')
         name_lbl = QLabel(pos.get('name') or pos.get('sector') or '—')
-        name_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11px; border: none;')
+        name_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11pt; border: none;')
         name_lbl.setMaximumWidth(130)
+        name_lbl.setTextFormat(Qt.TextFormat.PlainText)
+        fm = name_lbl.fontMetrics()
+        elided = fm.elidedText(name_lbl.text(), Qt.TextElideMode.ElideRight, 130)
+        name_lbl.setText(elided)
         id_col.addWidget(ticker_lbl)
         id_col.addWidget(name_lbl)
         row.addLayout(id_col, stretch=2)
 
         # Shares
         shares_lbl = QLabel(f"{pos.get('shares', 0):,.4g} sh")
-        shares_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11px; border: none;')
+        shares_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11pt; border: none;')
         shares_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(shares_lbl, stretch=1)
 
         # Current price
         price = pos.get('current_price') or pos.get('price', 0)
         price_lbl = QLabel(fmt_currency(price))
-        price_lbl.setStyleSheet('font-size: 12px; border: none;')
+        price_lbl.setStyleSheet('font-size: 12pt; border: none;')
         price_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(price_lbl, stretch=1)
 
@@ -58,7 +62,7 @@ class _PositionRow(QFrame):
         equity_font.setPointSize(12)
         equity_font.setBold(True)
         equity_lbl.setFont(equity_font)
-        equity_lbl.setStyleSheet('border: none;')
+        equity_lbl.setStyleSheet('font-size: 12pt; border: none;')
         equity_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(equity_lbl, stretch=2)
 
@@ -72,7 +76,7 @@ class _PositionRow(QFrame):
             color = _MUTED
             change_text = '—'
         change_lbl = QLabel(change_text)
-        change_lbl.setStyleSheet(f'color: {color}; font-size: 12px; font-weight: 700; border: none;')
+        change_lbl.setStyleSheet(f'color: {color}; font-size: 12pt; font-weight: 700; border: none;')
         change_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(change_lbl, stretch=1)
 
@@ -93,12 +97,12 @@ class PositionsListWidget(VectorWidget):
         # Header row
         header = QHBoxLayout()
         title_lbl = QLabel('Positions')
-        title_lbl.setFont(_title_font(22))
-        title_lbl.setStyleSheet('color: #e7ebf3; border: none;')
+        title_lbl.setFont(_title_font(16))
+        title_lbl.setStyleSheet('color: #e7ebf3; font-size: 16pt; border: none;')
         header.addWidget(title_lbl)
         header.addStretch(1)
         self._count_lbl = QLabel('')
-        self._count_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11px; border: none;')
+        self._count_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11pt; border: none;')
         header.addWidget(self._count_lbl)
         layout.addLayout(header)
 
@@ -114,7 +118,7 @@ class PositionsListWidget(VectorWidget):
             ('6mo Trend', 1, Qt.AlignmentFlag.AlignRight),
         ]:
             lbl = QLabel(label)
-            lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10px; border: none;')
+            lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10pt; border: none;')
             lbl.setAlignment(align | Qt.AlignmentFlag.AlignVCenter)
             col_row.addWidget(lbl, stretch=stretch)
         layout.addLayout(col_row)

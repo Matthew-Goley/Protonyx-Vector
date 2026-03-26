@@ -18,7 +18,14 @@
       "Bash(.venv/Scripts/python.exe main.py)",
       "Bash(.venv/Scripts/python main.py)",
       "Bash(ls .venv/Scripts/python*)",
-      "Bash(.venvScriptspython.exe main.py)"
+      "Bash(.venvScriptspython.exe main.py)",
+      "Bash(python -c \"import vector.app; import vector.widget_types; print\\(''All imports OK''\\)\")",
+      "Bash(.venv/Scripts/python -m py_compile vector/widget_types/portfolio_beta.py)",
+      "Bash(.venv/Scripts/python -m py_compile vector/widget_types/positions_list.py)",
+      "Bash(.venv/Scripts/python -m py_compile vector/widget_types/portfolio_diversification.py)",
+      "Bash(.venv/Scripts/python -m py_compile vector/widget_types/portfolio_volatility.py)",
+      "Bash(.venv/Scripts/python -m py_compile vector/widget_types/recommendation.py)",
+      "Bash(.venv/Scripts/python -m py_compile vector/constants.py)"
     ]
   }
 }

@@ -1,12 +1,23 @@
-from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QWidget, QScrollArea, QFrame
-from PyQt6.QtGui import QFont, QColor, QPainter
+from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QWidget, QSizePolicy
+from PyQt6.QtGui import QFont, QColor, QPainter, QPen
 from PyQt6.QtCore import Qt, QRectF
 
 from vector.widget_base import VectorWidget
 
 _MUTED = '#8d98af'
-_ACCENT = ['#3A8DFF', '#8B3FCF', '#E91E8C', '#FF6B2B', '#54BFFF', '#B44AE6',
-           '#4ade80', '#f3b84b', '#f87171', '#38bdf8']
+# Gradient-themed palette: solid picks inspired by the 4-key gradient
+_PIE_COLORS = [
+    '#34a7ff',  # blue
+    '#a256f6',  # purple
+    '#e34ec6',  # pink
+    '#fd8a83',  # coral
+    '#54BFFF',  # light blue
+    '#FF6B2B',  # orange
+    '#4ade80',  # green
+    '#f3b84b',  # amber
+    '#f87171',  # red
+    '#38bdf8',  # sky
+]
 
 
 def _title_font(size: int = 22) -> QFont:
@@ -16,60 +27,89 @@ def _title_font(size: int = 22) -> QFont:
     return f
 
 
-class _SectorBar(QWidget):
-    """Single horizontal bar row: [dot] sector name [bar] pct%"""
+class _DonutChart(QWidget):
+    """Modern donut pie chart with rounded segment ends and a dark center hole."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._slices: list[tuple[float, QColor]] = []  # (pct, color)
+        self.setMinimumSize(100, 100)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def set_slices(self, slices: list[tuple[float, str]]) -> None:
+        self._slices = [(pct, QColor(c)) for pct, c in slices]
+        self.update()
+
+    def paintEvent(self, _event) -> None:  # noqa: N802
+        if not self._slices:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Square area centered in the widget
+        side = min(self.width(), self.height())
+        x_off = (self.width() - side) / 2
+        y_off = (self.height() - side) / 2
+        margin = 6.0
+        rect = QRectF(x_off + margin, y_off + margin, side - margin * 2, side - margin * 2)
+
+        thickness = side * 0.18  # donut ring width
+        pen_width = thickness
+
+        # Draw each arc segment
+        start_angle = 90 * 16  # start from top (Qt uses 1/16th degrees, 0 = 3 o'clock)
+        for pct, color in self._slices:
+            span = int(round(pct / 100.0 * 360 * 16))
+            if span == 0:
+                continue
+
+            pen = QPen(color, pen_width)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+
+            # Inset the rect so the thick pen stays inside
+            inset = pen_width / 2
+            arc_rect = rect.adjusted(inset, inset, -inset, -inset)
+            painter.drawArc(arc_rect, start_angle, -span)  # negative = clockwise
+            start_angle -= span
+
+        # Dark center circle for the "donut hole"
+        hole_r = (side / 2 - margin) - thickness
+        if hole_r > 0:
+            center = rect.center()
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor('#0b1020'))
+            painter.drawEllipse(center, hole_r, hole_r)
+
+        painter.end()
+
+
+class _LegendRow(QWidget):
+    """Compact legend: colored dot + sector name + percentage."""
 
     def __init__(self, sector: str, pct: float, color: str, parent=None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(28)
-        self._pct = pct
-        self._color = QColor(color)
+        self.setFixedHeight(22)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
+        row.setSpacing(6)
 
         dot = QLabel('●')
-        dot.setFixedWidth(14)
-        dot.setStyleSheet(f'color: {color}; font-size: 10px; border: none;')
+        dot.setFixedWidth(12)
+        dot.setStyleSheet(f'color: {color}; font-size: 8pt; border: none;')
         row.addWidget(dot)
 
         name = QLabel(sector)
-        name.setStyleSheet('font-size: 12px; border: none;')
-        name.setMinimumWidth(80)
-        row.addWidget(name, stretch=2)
-
-        self._bar_widget = _Bar(pct, color)
-        row.addWidget(self._bar_widget, stretch=3)
+        name.setStyleSheet(f'color: #e7ebf3; font-size: 9pt; border: none;')
+        row.addWidget(name, stretch=1)
 
         pct_lbl = QLabel(f'{pct:.1f}%')
-        pct_lbl.setFixedWidth(44)
         pct_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        pct_lbl.setStyleSheet('font-size: 12px; font-weight: 700; border: none;')
+        pct_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 9pt; font-weight: 700; border: none;')
         row.addWidget(pct_lbl)
-
-
-class _Bar(QWidget):
-    def __init__(self, pct: float, color: str, parent=None) -> None:
-        super().__init__(parent)
-        self._pct = pct
-        self._color = QColor(color)
-        self.setFixedHeight(8)
-
-    def paintEvent(self, _event) -> None:  # noqa: N802
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w = self.width()
-        h = self.height()
-        # Track
-        painter.setBrush(QColor('#1e2840'))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(QRectF(0, 0, w, h), h / 2, h / 2)
-        # Fill
-        fill_w = max(0.0, w * self._pct / 100.0)
-        if fill_w > 0:
-            painter.setBrush(self._color)
-            painter.drawRoundedRect(QRectF(0, 0, fill_w, h), h / 2, h / 2)
 
 
 class PortfolioDiversificationWidget(VectorWidget):
@@ -83,56 +123,58 @@ class PortfolioDiversificationWidget(VectorWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 12)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         # Header
         header = QHBoxLayout()
         title_lbl = QLabel('Diversification')
-        title_lbl.setFont(_title_font(22))
-        title_lbl.setStyleSheet('color: #e7ebf3; border: none;')
+        title_lbl.setFont(_title_font(16))
+        title_lbl.setStyleSheet('color: #e7ebf3; font-size: 16pt; border: none;')
         header.addWidget(title_lbl)
         header.addStretch(1)
         self._sector_count_lbl = QLabel('')
-        self._sector_count_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11px; border: none;')
+        self._sector_count_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11pt; border: none;')
         header.addWidget(self._sector_count_lbl)
         layout.addLayout(header)
 
         # Insight line
         self._insight_lbl = QLabel('')
         self._insight_lbl.setWordWrap(True)
-        self._insight_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11px; border: none;')
+        self._insight_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 9pt; border: none;')
         layout.addWidget(self._insight_lbl)
 
-        # Sector bars container
-        self._bars_widget = QWidget()
-        self._bars_widget.setStyleSheet('background: transparent;')
-        self._bars_layout = QVBoxLayout(self._bars_widget)
-        self._bars_layout.setContentsMargins(0, 0, 0, 0)
-        self._bars_layout.setSpacing(4)
+        # Content: donut (left) + legend (right)
+        content = QHBoxLayout()
+        content.setSpacing(12)
 
-        scroll = QScrollArea()
-        scroll.setWidget(self._bars_widget)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet('background: transparent; border: none;')
-        layout.addWidget(scroll, stretch=1)
+        self._donut = _DonutChart()
+        content.addWidget(self._donut, stretch=3)
+
+        self._legend_widget = QWidget()
+        self._legend_widget.setStyleSheet('background: transparent;')
+        self._legend_layout = QVBoxLayout(self._legend_widget)
+        self._legend_layout.setContentsMargins(0, 0, 0, 0)
+        self._legend_layout.setSpacing(2)
+        content.addWidget(self._legend_widget, stretch=2)
+
+        layout.addLayout(content, stretch=1)
 
     def refresh(self) -> None:
         if not self._window:
             return
         positions = self._window.positions or []
 
-        # Clear bars
-        while self._bars_layout.count():
-            item = self._bars_layout.takeAt(0)
+        # Clear legend
+        while self._legend_layout.count():
+            item = self._legend_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
         if not positions:
             self._sector_count_lbl.setText('')
             self._insight_lbl.setText('Add positions to see allocation.')
-            self._bars_layout.addStretch(1)
+            self._donut.set_slices([])
+            self._legend_layout.addStretch(1)
             return
 
         # Build sector map weighted by equity
@@ -154,9 +196,12 @@ class PortfolioDiversificationWidget(VectorWidget):
         else:
             self._insight_lbl.setText('Allocation is well spread across sectors.')
 
+        slices: list[tuple[float, str]] = []
         for i, (sector, equity) in enumerate(allocation):
             pct = (equity / total_equity * 100) if total_equity else 0
-            color = _ACCENT[i % len(_ACCENT)]
-            self._bars_layout.addWidget(_SectorBar(sector, pct, color))
+            color = _PIE_COLORS[i % len(_PIE_COLORS)]
+            slices.append((pct, color))
+            self._legend_layout.addWidget(_LegendRow(sector, pct, color))
 
-        self._bars_layout.addStretch(1)
+        self._legend_layout.addStretch(1)
+        self._donut.set_slices(slices)

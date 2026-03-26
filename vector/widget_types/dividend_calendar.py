@@ -69,7 +69,7 @@ class _DivRow(QFrame):
         days_lbl.setFixedWidth(46)
         days_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         days_lbl.setStyleSheet(
-            f'color: {_days_color(days)}; font-size: 12px; font-weight: 700; border: none;'
+            f'color: {_days_color(days)}; font-size: 12pt; font-weight: 700; border: none;'
         )
         row.addWidget(days_lbl)
 
@@ -77,23 +77,23 @@ class _DivRow(QFrame):
         ticker_lbl = QLabel(ticker)
         ticker_lbl.setFont(_title_font(13))
         ticker_lbl.setFixedWidth(56)
-        ticker_lbl.setStyleSheet('border: none;')
+        ticker_lbl.setStyleSheet('font-size: 13pt; border: none;')
         row.addWidget(ticker_lbl)
 
         # Date
         date_lbl = QLabel(next_date.strftime('%b %d, %Y'))
-        date_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11px; border: none;')
+        date_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11pt; border: none;')
         row.addWidget(date_lbl, stretch=2)
 
         # Frequency
         freq_lbl = QLabel(freq)
-        freq_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11px; border: none;')
+        freq_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 11pt; border: none;')
         freq_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         row.addWidget(freq_lbl, stretch=1)
 
         # Amount
         amt_lbl = QLabel(f'~{fmt_currency(amount)}')
-        amt_lbl.setStyleSheet('font-size: 12px; font-weight: 700; border: none;')
+        amt_lbl.setStyleSheet('font-size: 12pt; font-weight: 700; border: none;')
         amt_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         amt_lbl.setFixedWidth(72)
         row.addWidget(amt_lbl)
@@ -115,12 +115,12 @@ class DividendCalendarWidget(VectorWidget):
         # Header
         header = QHBoxLayout()
         title_lbl = QLabel('Dividend Calendar')
-        title_lbl.setFont(_title_font(22))
-        title_lbl.setStyleSheet('color: #e7ebf3; border: none;')
+        title_lbl.setFont(_title_font(16))
+        title_lbl.setStyleSheet('color: #e7ebf3; font-size: 16pt; border: none;')
         header.addWidget(title_lbl)
         header.addStretch(1)
         self._note_lbl = QLabel('estimated')
-        self._note_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10px; border: none;')
+        self._note_lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10pt; border: none;')
         header.addWidget(self._note_lbl)
         layout.addLayout(header)
 
@@ -136,7 +136,7 @@ class DividendCalendarWidget(VectorWidget):
             ('Per Share', 72, Qt.AlignmentFlag.AlignRight),
         ]:
             lbl = QLabel(text)
-            lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10px; border: none;')
+            lbl.setStyleSheet(f'color: {_MUTED}; font-size: 10pt; border: none;')
             lbl.setAlignment(align | Qt.AlignmentFlag.AlignVCenter)
             if width:
                 lbl.setFixedWidth(width)
@@ -199,7 +199,7 @@ class DividendCalendarWidget(VectorWidget):
 
         if not entries:
             no_data = QLabel('No dividend data available for held positions.')
-            no_data.setStyleSheet(f'color: {_MUTED}; font-size: 12px; border: none;')
+            no_data.setStyleSheet(f'color: {_MUTED}; font-size: 12pt; border: none;')
             no_data.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._rows_layout.addWidget(no_data)
         else:
