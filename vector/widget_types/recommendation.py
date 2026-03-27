@@ -96,9 +96,9 @@ def _highlight_html(text: str) -> str:
             chunk, flags=re.IGNORECASE,
         ))
 
-    # 5. ALL-CAPS tickers (2–5 letters) → blue (last, so they don't interfere)
+    # 5. ALL-CAPS tickers (2–5 letters, optional hyphenated suffix like BRK-B) → blue
     s = _apply_to_text(s, lambda chunk: re.sub(
-        r'\b([A-Z]{2,5})\b',
+        r'\b([A-Z]{2,5}(?:-[A-Z]{1,2})?)\b',
         lambda m: _wrap(m.group(), _GRAD_START),
         chunk,
     ))
