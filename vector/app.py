@@ -813,12 +813,10 @@ class WidgetPickerDialog(QDialog):
         layout.addWidget(sub)
         cards_col = QVBoxLayout()
         cards_col.setSpacing(8)
-        from vector.widget_types.recommendation import RecommendationWidget as _RW
         for cls in discover_widgets():
             cards_col.addWidget(_PickerCard(
                 cls.NAME, cls.DESCRIPTION,
                 lambda c=cls: self._pick(c),
-                featured=(cls is _RW),
             ))
         layout.addLayout(cards_col)
         cancel = QPushButton('Cancel')
@@ -869,7 +867,6 @@ def _circle_btn_style(font_size: int, active: bool = False) -> str:
 
 
 _DEFAULT_LAYOUT = [
-    {'type': 'RecommendationWidget',      'row': 0, 'col': 1,  'rowspan': 2, 'colspan': 10},
     {'type': 'PortfolioVectorWidget',     'row': 2, 'col': 5,  'rowspan': 3, 'colspan': 6},
     {'type': 'PositionsListWidget',       'row': 2, 'col': 0,  'rowspan': 3, 'colspan': 5},
     {'type': 'TotalEquityWidget',         'row': 5, 'col': 0,  'rowspan': 2, 'colspan': 4},
@@ -885,6 +882,8 @@ class DashboardPage(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
+        from vector.widget_types.lens import LensDisplay
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -912,6 +911,11 @@ class DashboardPage(QWidget):
         self._dash_grid.add_widget(self._add_btn, row=0, col=0, fixed=True)
         self._dash_grid.add_widget(self._edit_btn, row=1, col=0, fixed=True)
 
+        # Permanent lens display at row 0-1, col 1-10 (fixed, not removable)
+        self._lens = LensDisplay(window=self.window, show_button=True)
+        self._lens.open_lens_clicked.connect(self._navigate_to_lens)
+        self._dash_grid.add_widget(self._lens, row=0, col=1, rowspan=2, colspan=10, fixed=True)
+
         self._scroll = QScrollArea()
         self._scroll.setWidget(self._dash_grid)
         self._scroll.setWidgetResizable(False)
@@ -927,7 +931,15 @@ class DashboardPage(QWidget):
 
         # Load saved layout, or apply default on first run
         saved = self.window.store.load_layout()
-        self._dash_grid.restore_layout(saved if saved else _DEFAULT_LAYOUT, self.window)
+        layout = saved if saved else _DEFAULT_LAYOUT
+        # Filter out any legacy RecommendationWidget entries from saved layouts
+        layout = [e for e in layout if e.get('type') != 'RecommendationWidget']
+        self._dash_grid.restore_layout(layout, self.window)
+
+    def _navigate_to_lens(self) -> None:
+        shell = self.window.shell
+        if shell:
+            shell.set_page('Vector Lens')
 
     def save_layout(self) -> None:
         self.window.store.save_layout(self._dash_grid.get_layout())
@@ -951,6 +963,7 @@ class DashboardPage(QWidget):
         self._edit_btn.setStyleSheet(_circle_btn_style(13, active=self._edit_mode))
 
     def update_dashboard(self, positions: list[dict[str, Any]], analytics: dict[str, Any]) -> None:
+        self._lens.refresh()
         for item in self._dash_grid._items:
             w = item['widget']
             if hasattr(w, 'refresh'):
@@ -1295,6 +1308,31 @@ class QDoubleSpinBoxCompat(QSpinBox):
         super().setValue(int(round(value * 100)))
 
 
+class VectorLensPage(QWidget):
+    """Dedicated page for the Vector Lens — accessible from sidebar or dashboard button."""
+
+    def __init__(self, window: 'VectorMainWindow') -> None:
+        super().__init__()
+        self.window = window
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        from vector.widget_types.lens import LensDisplay
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        self._lens = LensDisplay(window=self.window, show_button=False)
+        self._lens.setFixedHeight(200)
+        layout.addWidget(self._lens)
+
+        layout.addStretch(1)
+
+    def refresh(self) -> None:
+        self._lens.refresh()
+
+
 class MainShell(QWidget):
     def __init__(self, window: 'VectorMainWindow') -> None:
         super().__init__()
@@ -1304,6 +1342,7 @@ class MainShell(QWidget):
         self.header_title = QLabel('Dashboard')
         self.header_breadcrumb = QLabel('Vector / Dashboard')
         self.dashboard_page = DashboardPage(window)
+        self.lens_page = VectorLensPage(window)
         self.profile_page = ProfilePage(window)
         self.settings_page = SettingsPage(window)
         self._build_ui()
@@ -1320,7 +1359,7 @@ class MainShell(QWidget):
         sidebar_layout.setContentsMargins(20, 24, 20, 24)
         sidebar_layout.setSpacing(12)
         sidebar_layout.addWidget(self.window.make_logo_label(44))
-        for name in ('Dashboard', 'Profile', 'Settings'):
+        for name in ('Dashboard', 'Vector Lens', 'Profile', 'Settings'):
             button = QPushButton(name)
             button.setObjectName('navButton')
             button.clicked.connect(partial(self.set_page, name))
@@ -1348,6 +1387,7 @@ class MainShell(QWidget):
         content.addWidget(header)
 
         self.page_stack.addWidget(self.dashboard_page)
+        self.page_stack.addWidget(self.lens_page)
         self.page_stack.addWidget(self.profile_page)
         self.page_stack.addWidget(self.settings_page)
         content.addWidget(self.page_stack, stretch=1)
@@ -1357,7 +1397,7 @@ class MainShell(QWidget):
         self.set_page('Dashboard')
 
     def set_page(self, page_name: str) -> None:
-        mapping = {'Dashboard': 0, 'Profile': 1, 'Settings': 2}
+        mapping = {'Dashboard': 0, 'Vector Lens': 1, 'Profile': 2, 'Settings': 3}
         self.page_stack.setCurrentIndex(mapping[page_name])
         self.header_title.setText(page_name)
         self.header_breadcrumb.setText(f'Vector / {page_name}')
@@ -1366,10 +1406,9 @@ class MainShell(QWidget):
             button.style().unpolish(button)
             button.style().polish(button)
         if page_name == 'Dashboard':
-            for item in self.dashboard_page._dash_grid._items:
-                w = item['widget']
-                if type(w).__name__ == 'RecommendationWidget':
-                    w.refresh()
+            self.dashboard_page._lens.refresh()
+        elif page_name == 'Vector Lens':
+            self.lens_page.refresh()
 
 
 class VectorMainWindow(QMainWindow):
@@ -1509,6 +1548,7 @@ class VectorMainWindow(QMainWindow):
         )
         self.state = self.store.load_app_state()
         self.shell.dashboard_page.update_dashboard(self.positions, analytics)
+        self.shell.lens_page.refresh()
         self.shell.profile_page.update_profile(self.state, self.positions, analytics)
         self.shell.settings_page.load_from_settings(self.settings, self.positions)
         self._setup_auto_refresh()

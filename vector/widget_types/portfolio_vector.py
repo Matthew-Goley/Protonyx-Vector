@@ -3,7 +3,7 @@ Portfolio Vector widget — directional arrow + plain-language verdict.
 
 The arrow always renders with the app's signature blue-to-purple gradient.
 Direction is communicated through angle alone. A verdict sentence on the right
-explains what the data means in plain terms, similar to the Recommendation widget.
+explains what the data means in plain terms, similar to the Lens display.
 """
 
 import math

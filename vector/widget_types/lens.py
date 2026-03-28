@@ -1,11 +1,10 @@
 import re
 
-from PyQt6.QtWidgets import QVBoxLayout, QLabel, QFrame
+from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton
 from PyQt6.QtGui import QFont, QColor, QFontMetrics, QLinearGradient, QPainter, QPen
-from PyQt6.QtCore import Qt, QRect, QRectF, QTimer
+from PyQt6.QtCore import Qt, QRect, QRectF, QTimer, pyqtSignal
 
-from vector.widget_base import VectorWidget
-from vector.recommendations import generate_recommendation
+from vector.lens_engine import generate_lens
 
 _MUTED      = '#8d98af'
 _BG         = '#121828'
@@ -142,14 +141,15 @@ class _AccentFrame(QFrame):
         painter.drawRoundedRect(QRectF(0.5, 0.5, self.width() - 1, h - 1), 12, 12)
 
 
-class RecommendationWidget(VectorWidget):
-    NAME = 'Recommendation'
-    DESCRIPTION = "Portfolio insight and next-step guidance."
-    DEFAULT_ROWSPAN = 2
-    DEFAULT_COLSPAN = 10
+class LensDisplay(QFrame):
+    """Reusable lens readout — used on both the dashboard and the Vector Lens page."""
 
-    def __init__(self, window=None, parent=None) -> None:
-        super().__init__(window=window, parent=parent)
+    open_lens_clicked = pyqtSignal()
+
+    def __init__(self, window=None, show_button: bool = True, parent=None) -> None:
+        super().__init__(parent)
+        self._window = window
+        self._show_button = show_button
 
         self._tw_timer = QTimer(self)
         self._tw_timer.setInterval(10)
@@ -165,7 +165,7 @@ class RecommendationWidget(VectorWidget):
         card_layout.setContentsMargins(28, 24, 28, 24)
         card_layout.setSpacing(10)
 
-        title_lbl = QLabel('Recommendation')
+        title_lbl = QLabel('Lens')
         title_lbl.setFont(_font(16, bold=True))
         title_lbl.setStyleSheet('color: #e7ebf3; font-size: 16pt; border: none;')
         card_layout.addWidget(title_lbl)
@@ -179,21 +179,43 @@ class RecommendationWidget(VectorWidget):
         )
         card_layout.addWidget(self._text_lbl, stretch=1)
 
+        if show_button:
+            btn_row = QHBoxLayout()
+            btn_row.addStretch(1)
+            self._open_btn = QPushButton('Vector Lens  \u203a')
+            self._open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._open_btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #34a7ff, stop:0.33 #a256f6, stop:0.66 #e34ec6, stop:1 #fd8a83);
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 10px;
+                    padding: 8px 18px;
+                    font-size: 11pt;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #5cc0ff, stop:0.33 #b87af8, stop:0.66 #ea6ed4, stop:1 #fea69c);
+                }
+            """)
+            self._open_btn.clicked.connect(self.open_lens_clicked.emit)
+            btn_row.addWidget(self._open_btn)
+            card_layout.addLayout(btn_row)
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._card)
 
     def _available_size(self) -> tuple[int, int]:
         """Return (width, height) available for text, using the best source."""
-        # Prefer actual label geometry — it's authoritative after layout
         w = self._text_lbl.width()
         h = self._text_lbl.height()
         if w >= 20 and h >= 20:
             return w, h
-        # Fallback: estimate from card minus chrome
         cw = max(self._card.width(), self.width())
         ch = max(self._card.height(), self.height())
-        # 28+28 horizontal margins, 24+24 vertical margins + ~30 title + 10 spacing
         return max(cw - 56, 200), max(ch - 88, 60)
 
     def _fit_pt(self, text: str) -> int:
@@ -207,7 +229,6 @@ class RecommendationWidget(VectorWidget):
                 Qt.TextFlag.TextWordWrap,
                 text,
             )
-            # Use 90% of available height to guarantee no clipping
             if br.height() <= int(h * 0.9):
                 return pt
         return 10
@@ -238,12 +259,6 @@ class RecommendationWidget(VectorWidget):
         self._card.setGeometry(self.rect())
         QTimer.singleShot(0, self._refit)
 
-    def _apply_style(self, edit: bool) -> None:
-        border = '#34a7ff' if edit else 'transparent'
-        self.setStyleSheet(
-            f'background: transparent; border: 2px solid {border}; border-radius: 12px;'
-        )
-
     @staticmethod
     def _truncate_html(html: str, visible_chars: int) -> str:
         """Truncate HTML to show only the first N visible characters, preserving tags."""
@@ -258,7 +273,6 @@ class RecommendationWidget(VectorWidget):
                     break
                 tag = html[i:end + 1]
                 result.append(tag)
-                # Track open/close tags for proper closing
                 if not tag.startswith('</'):
                     m = re.match(r'<(\w+)', tag)
                     if m:
@@ -268,7 +282,6 @@ class RecommendationWidget(VectorWidget):
                         open_tags.pop()
                 i = end + 1
             elif html[i] == '&':
-                # HTML entity — counts as one visible char
                 end = html.find(';', i)
                 if end == -1:
                     result.append(html[i])
@@ -282,7 +295,6 @@ class RecommendationWidget(VectorWidget):
                 result.append(html[i])
                 shown += 1
                 i += 1
-        # Close any open tags
         for tag in reversed(open_tags):
             result.append(f'</{tag}>')
         return ''.join(result)
@@ -315,13 +327,13 @@ class RecommendationWidget(VectorWidget):
         settings  = self._window.settings
 
         try:
-            result = generate_recommendation(positions, store, settings)
+            result = generate_lens(positions, store, settings)
             if len(result) == 2:
                 text, _color = result
             else:
                 s1, s2, _color = result
                 text = s1 + "  " + s2
         except Exception:  # noqa: BLE001
-            text = "Unable to generate a recommendation right now. Check your positions and try refreshing."
+            text = "Unable to generate a lens insight right now. Check your positions and try refreshing."
 
         self._start_typewrite(text)

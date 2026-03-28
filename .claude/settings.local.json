@@ -25,7 +25,9 @@
       "Bash(.venv/Scripts/python -m py_compile vector/widget_types/portfolio_diversification.py)",
       "Bash(.venv/Scripts/python -m py_compile vector/widget_types/portfolio_volatility.py)",
       "Bash(.venv/Scripts/python -m py_compile vector/widget_types/recommendation.py)",
-      "Bash(.venv/Scripts/python -m py_compile vector/constants.py)"
+      "Bash(.venv/Scripts/python -m py_compile vector/constants.py)",
+      "Bash(.venv/Scripts/python -c \"from vector.app import main; print\\(''OK''\\)\")",
+      "Bash(.venv/Scripts/python -c \":*)"
     ]
   }
 }

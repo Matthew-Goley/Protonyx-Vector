@@ -14,12 +14,10 @@ from vector.widget_types.portfolio_diversification import PortfolioDiversificati
 from vector.widget_types.portfolio_vector import PortfolioVectorWidget
 from vector.widget_types.portfolio_volatility import PortfolioVolatilityWidget
 from vector.widget_types.positions_list import PositionsListWidget
-from vector.widget_types.recommendation import RecommendationWidget
 from vector.widget_types.sharpe_ratio import SharpeRatioWidget
 from vector.widget_types.total_equity import TotalEquityWidget
 
 _WIDGETS: list[type[VectorWidget]] = [
-    RecommendationWidget,
     DividendCalendarWidget,
     PortfolioBetaWidget,
     PortfolioDiversificationWidget,

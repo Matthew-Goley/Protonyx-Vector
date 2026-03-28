@@ -24,15 +24,15 @@ No build step, test suite, or linter is configured.
 | Module | Role |
 |---|---|
 | `main.py` | Entry point — calls `vector.app.main()` |
-| `vector/app.py` | All UI: `VectorMainWindow`, pages (`OnboardingPage`, `MainShell`, `DashboardPage`, `ProfilePage`, `SettingsPage`), dialogs, shared stylesheets |
+| `vector/app.py` | All UI: `VectorMainWindow`, pages (`OnboardingPage`, `MainShell`, `DashboardPage`, `VectorLensPage`, `ProfilePage`, `SettingsPage`), dialogs, shared stylesheets |
 | `vector/analytics.py` | Portfolio math: trend slope, volatility, Sharpe ratio, beta, insight HTML generation |
 | `vector/store.py` | `DataStore` — single source of truth: positions, settings, app state, market data, layout; replaces `storage.py` |
 | `vector/market.py` | Legacy `MarketDataService`; superseded by `DataStore` but may still be referenced |
 | `vector/storage.py` | Legacy `StorageManager`; superseded by `DataStore` |
-| `vector/recommendations.py` | Recommendation engine: generates (outlook, action, color) tuples from portfolio state |
+| `vector/lens_engine.py` | Lens engine: generates (outlook, action, color) tuples from portfolio state |
 | `vector/widget_base.py` | `VectorWidget` — base `QFrame` for all dashboard widgets; handles edit-mode drag, context menu |
 | `vector/widget_registry.py` | `discover_widgets()` / `get_widget_class()` — registry of all concrete widget types |
-| `vector/widget_types/` | 9 concrete widget implementations (see below) |
+| `vector/widget_types/` | 8 concrete widget implementations + `LensDisplay` (see below) |
 | `vector/widgets.py` | Shared UI primitives: `CardFrame`, `GradientBorderFrame`, `GradientLine`, `BlurrableStack`, `DimOverlay`, `EmptyState`, `LoadingButton` |
 | `vector/constants.py` | File paths, TTL constants, default settings values, threshold maps |
 | `vector/paths.py` | `resource_path()` (PyInstaller-aware asset lookup), `user_data_dir()` |
@@ -48,8 +48,11 @@ No build step, test suite, or linter is configured.
 | `PortfolioBetaWidget` | Portfolio beta vs benchmark |
 | `SharpeRatioWidget` | Annualised Sharpe ratio |
 | `PositionsListWidget` | Scrollable positions table |
-| `RecommendationWidget` | AI-style outlook + action sentences |
 | `DividendCalendarWidget` | Upcoming dividend dates |
+
+### Vector Lens (`vector/widget_types/lens.py`)
+
+`LensDisplay` is a reusable QFrame (not a VectorWidget) that renders the lens readout with typewriter animation and gradient-highlighted text. It is a **permanent fixture** on the dashboard (cannot be removed or repositioned) and also appears on the dedicated Vector Lens page. The dashboard instance includes a "Vector Lens ›" button that navigates to the full Lens page.
 
 ### Adding a New Widget
 
@@ -64,10 +67,10 @@ No build step, test suite, or linter is configured.
 
 1. `VectorMainWindow` owns `DataStore`, all settings/state, and the `QTimer` for auto-refresh.
 2. On startup: load JSON state → show `OnboardingPage` (first run) or `MainShell` (returning).
-3. `MainShell` hosts a sidebar + `QStackedWidget` with `DashboardPage`, `ProfilePage`, `SettingsPage`.
-4. `DashboardPage` renders a free-form grid of `VectorWidget` instances; layout is loaded from / saved to `dashboard_layout.json`.
-5. `DashboardPage.refresh_data()` calls `DataStore.build_histories()` → `compute_portfolio_analytics()` → calls `widget.refresh()` on each placed widget.
-6. Edit mode (toolbar button) enables drag-to-reposition and right-click delete on all widgets.
+3. `MainShell` hosts a sidebar + `QStackedWidget` with `DashboardPage`, `VectorLensPage`, `ProfilePage`, `SettingsPage`.
+4. `DashboardPage` has a permanent `LensDisplay` at the top, followed by a free-form grid of `VectorWidget` instances; grid layout is loaded from / saved to `dashboard_layout.json`.
+5. `DashboardPage.refresh_data()` calls `DataStore.build_histories()` → `compute_portfolio_analytics()` → refreshes the lens and calls `widget.refresh()` on each placed widget.
+6. Edit mode (toolbar button) enables drag-to-reposition and right-click delete on grid widgets (the lens is not affected).
 7. A `QTimer` drives auto-refresh at the interval set in `SettingsPage` (1 min / 5 min / 15 min / manual).
 
 ### Analytics Engine (`analytics.py`)
@@ -123,10 +126,10 @@ All files live under `%LOCALAPPDATA%/Protonyx/Vector/` (Windows) or `~/Vector/da
 
 `assets/vector_full.png` and `assets/vector_taskbar.png` are loaded at startup via `resource_path()`. The app falls back to a procedurally generated placeholder if they are missing. Under PyInstaller, `resource_path()` resolves from `sys._MEIPASS`.
 
-### Recommendation Engine (`recommendations.py`)
+### Lens Engine (`lens_engine.py`)
 
-`generate_recommendation(positions, store, settings)` returns `(outlook: str, action: str, color: str)`.
+`generate_lens(positions, store, settings)` returns `(text: str, color: str)`.
 
 - Computes per-ticker slope + volatility, then classifies portfolio direction × volatility level.
-- Selects from templated sentence banks (`_OUTLOOK`, `_ACTION`) using a deterministic hash so the text is stable across refreshes for the same portfolio state.
+- Selects from templated sentence banks using a deterministic hash so the text is stable across refreshes for the same portfolio state.
 - Action priority: single position → high concentration (stock) → high concentration (sector) → weak/depreciating downtrend → high-vol uptrend → neutral/diversify → hold.

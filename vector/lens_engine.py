@@ -1,5 +1,5 @@
 """
-Recommendation engine for Vector.
+Lens engine for Vector.
 
 Generates exactly two plain-English sentences covering:
   A. Risk right now     — concentration, volatility, diversification
@@ -683,7 +683,7 @@ def _pick_template(state: str, positions: list) -> int:
 # Public API
 # ---------------------------------------------------------------------------
 
-def generate_recommendation(
+def generate_lens(
     positions: list[dict[str, Any]],
     store,
     settings: dict[str, Any],
@@ -849,6 +849,6 @@ def generate_recommendation(
         s2 = s2_tmpl.format(**ctx)
     except (KeyError, ValueError):
         s1 = "Your portfolio is being tracked — check back after a full refresh for personalised guidance."
-        s2 = "Make sure your positions have up-to-date price data for the best recommendations."
+        s2 = "Make sure your positions have up-to-date price data for the best insights."
 
     return s1 + "  " + s2, color
