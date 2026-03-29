@@ -696,12 +696,14 @@ def generate_lens(
     positions: list[dict[str, Any]],
     store,
     settings: dict[str, Any],
-) -> tuple[str, str, list[str]]:
+) -> tuple[str, str, list[str], float]:
     """
-    Returns (text, color, recommended_tickers) where:
+    Returns (text, color, recommended_tickers, deposit_amount) where:
       text                 — two sentences covering risk and next-deposit guidance
       color                — hex color reflecting portfolio state
       recommended_tickers  — list of tickers suggested for the next deposit
+      deposit_amount       — dollar amount needed to bring the recommended sector
+                             to equal weight with all other sectors in the portfolio
     """
     from vector.analytics import (
         linear_regression_slope_percent,
@@ -718,6 +720,7 @@ def generate_lens(
             "Go to Settings and add a stock or ETF ticker to get started.",
             "#8d98af",
             [],
+            0.0,
         )
 
     refresh_interval = settings.get('refresh_interval', '5 min')
@@ -868,4 +871,14 @@ def generate_lens(
     if not recommended_tickers:
         recommended_tickers = sorted(slopes, key=slopes.get, reverse=True)[:3]
 
-    return s1 + "  " + s2, color, recommended_tickers
+    # ── Deposit amount needed to bring the underweight sector to equal weight ──
+    # Formula: solve (current_sector_eq + D) / (total_equity + D) = 1/n
+    # → D = (total_equity - n * current_sector_eq) / (n - 1)
+    known_sectors = {s for s in held_sectors if s != 'Unknown'}
+    n_target = len(known_sectors) + (1 if underweight not in known_sectors else 0)
+    n_target = max(n_target, 2)
+    current_sector_eq = sector_weights.get(underweight, 0.0)
+    raw_deposit = (total_equity - n_target * current_sector_eq) / (n_target - 1)
+    deposit_amount = max(raw_deposit, 0.0)
+
+    return s1 + "  " + s2, color, recommended_tickers, deposit_amount

@@ -1329,13 +1329,14 @@ class _GraphCard(QFrame):
         self._outer.setContentsMargins(16, 16, 16, 12)
         self._outer.setSpacing(10)
 
-        title_lbl = QLabel(title)
+        self._title_lbl = QLabel(title)
         f = QFont()
         f.setPointSize(12)
         f.setBold(True)
-        title_lbl.setFont(f)
-        title_lbl.setStyleSheet('font-size: 12pt; font-weight: 700;')
-        self._outer.addWidget(title_lbl)
+        self._title_lbl.setFont(f)
+        self._title_lbl.setStyleSheet('font-size: 12pt; font-weight: 700;')
+        self._title_lbl.setWordWrap(True)
+        self._outer.addWidget(self._title_lbl)
 
         self._placeholder = QLabel('Loading projection…')
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1346,6 +1347,9 @@ class _GraphCard(QFrame):
         self._canvas = None
         self._ax = None
         self._fig = None
+
+    def set_title(self, title: str) -> None:
+        self._title_lbl.setText(title)
 
     # ------------------------------------------------------------------
 
@@ -1376,6 +1380,7 @@ class _GraphCard(QFrame):
         bands: dict,
         median: 'Any',
         fan_color: str = '#34a7ff',
+        ylim: 'tuple[float, float] | None' = None,
     ) -> None:
         """Draw historical curve + Monte Carlo fan on the embedded axes."""
         import numpy as np
@@ -1389,6 +1394,16 @@ class _GraphCard(QFrame):
         ax = self._ax
         ax.clear()
 
+        # --- Normalisation base: today = 0% ---
+        today_value = float(median[0]) if median is not None and len(median) else (
+            hist_values[-1] if hist_values else 1.0
+        )
+        if today_value <= 0:
+            today_value = 1.0
+
+        def to_pct(v: 'float | np.ndarray') -> 'float | np.ndarray':
+            return (np.asarray(v, dtype=float) / today_value - 1.0) * 100.0
+
         # --- Dark theme ---
         ax.set_facecolor('#121828')
         for spine in ax.spines.values():
@@ -1400,14 +1415,11 @@ class _GraphCard(QFrame):
         ax.yaxis.tick_right()
         ax.yaxis.set_label_position('right')
 
-        # --- Historical curve ---
-        today_value = float(median[0]) if median is not None and len(median) else (
-            hist_values[-1] if hist_values else 0.0
-        )
+        # --- Historical curve (ends at 0% = today) ---
         if hist_days and hist_values:
             ax.plot(
                 list(hist_days) + [0],
-                list(hist_values) + [today_value],
+                list(to_pct(np.array(hist_values))) + [0.0],
                 color='#34a7ff', lw=1.5, zorder=3,
             )
 
@@ -1422,7 +1434,7 @@ class _GraphCard(QFrame):
                 if band_key in bands:
                     lo_arr, hi_arr = bands[band_key]
                     ax.fill_between(
-                        fd, lo_arr, hi_arr,
+                        fd, to_pct(lo_arr), to_pct(hi_arr),
                         alpha=alphas[band_key], color=fan_color, zorder=1,
                         linewidth=0,
                     )
@@ -1430,17 +1442,13 @@ class _GraphCard(QFrame):
             # Dashed median path
             if median is not None:
                 ax.plot(
-                    fd, median,
+                    fd, to_pct(np.asarray(median, dtype=float)),
                     color=fan_color, lw=1.5, ls='--', alpha=0.9, zorder=3,
                 )
 
-        # --- Y-axis dollar formatter ---
+        # --- Y-axis % formatter ---
         def _fmt(v: float, _pos: int) -> str:
-            if v >= 1_000_000:
-                return f'${v / 1_000_000:.1f}M'
-            if v >= 1_000:
-                return f'${v / 1_000:.0f}K'
-            return f'${v:.0f}'
+            return f'{v:+.1f}%' if v != 0 else '0%'
 
         ax.yaxis.set_major_formatter(FuncFormatter(_fmt))
 
@@ -1449,6 +1457,10 @@ class _GraphCard(QFrame):
         xlabels = ['Today', '1m', '2m', '3m', '4m', '5m']
         ax.set_xticks(xticks)
         ax.set_xticklabels(xlabels, color='#8d98af', fontsize=8)
+
+        # --- Shared y-axis scale ---
+        if ylim is not None:
+            ax.set_ylim(*ylim)
 
         self._canvas.draw()
 
@@ -1533,16 +1545,10 @@ class VectorLensPage(QWidget):
         except Exception:  # noqa: BLE001
             result_a = None
 
-        if result_a is not None:
-            future_days, bands_a, median_a = result_a
-            self._graph_a.plot(hist_days, hist_values, future_days, bands_a, median_a,
-                               fan_color='#34a7ff')
-        else:
-            self._graph_a.show_no_data('Insufficient history for projection.')
-
-        # --- Graph B: with lens deposit (+10% into recommended tickers) ---
+        # --- Graph B: deposit the calculated balancing amount into recommended tickers ---
         if recommended_tickers:
-            deposit = 0.1 * total_equity
+            raw_deposit = getattr(self._lens, '_deposit_amount', 0.0)
+            deposit = raw_deposit if raw_deposit > 0 else 0.1 * total_equity
             per_ticker = deposit / len(recommended_tickers)
             new_total = total_equity + deposit
 
@@ -1561,15 +1567,55 @@ class VectorLensPage(QWidget):
         else:
             result_b = None
 
-        if result_b is not None:
-            future_days_b, bands_b, median_b = result_b
-            self._graph_b.plot(hist_days, hist_values, future_days_b, bands_b, median_b,
-                               fan_color='#a256f6')
-        elif result_a is not None:
-            # No specific guidance — mirror Graph A in the lens colour
+        # Use result_a for Graph B fallback when there's no specific guidance
+        display_b = result_b if result_b is not None else result_a
+
+        # --- Shared y-axis limits in % space ---
+        # Each graph normalises to its own median[0] = 0%, so compute the union
+        # of both normalised ranges to lock both axes to the same % scale.
+        import numpy as np
+
+        def _pct_extremes(res: 'tuple | None') -> 'list[float]':
+            if res is None:
+                return []
+            _, bands, med = res
+            base = float(med[0]) if med is not None and len(med) else 1.0
+            if base <= 0:
+                return []
+            lo, hi = bands.get((10, 90), (np.array([]), np.array([])))
+            hist_pct = [((v / base) - 1) * 100 for v in (hist_values or [])]
+            band_pct = (((np.asarray(lo) / base) - 1) * 100).tolist() + \
+                       (((np.asarray(hi) / base) - 1) * 100).tolist()
+            return hist_pct + band_pct
+
+        all_pct = _pct_extremes(result_a) + _pct_extremes(display_b)
+        if all_pct:
+            pad = (max(all_pct) - min(all_pct)) * 0.06
+            shared_ylim: 'tuple[float, float] | None' = (min(all_pct) - pad, max(all_pct) + pad)
+        else:
+            shared_ylim = None
+
+        # --- Plot both graphs on the shared scale ---
+        if result_a is not None:
             future_days, bands_a, median_a = result_a
-            self._graph_b.plot(hist_days, hist_values, future_days, bands_a, median_a,
-                               fan_color='#a256f6')
+            self._graph_a.plot(hist_days, hist_values, future_days, bands_a, median_a,
+                               fan_color='#34a7ff', ylim=shared_ylim)
+        else:
+            self._graph_a.show_no_data('Insufficient history for projection.')
+
+        if display_b is not None:
+            future_days_b, bands_b, median_b = display_b
+            if recommended_tickers and result_b is not None:
+                raw_deposit = getattr(self._lens, '_deposit_amount', 0.0)
+                deposit = raw_deposit if raw_deposit > 0 else 0.1 * total_equity
+                tickers_str = ', '.join(recommended_tickers)
+                dep_fmt = f'${deposit:,.0f}'
+                b_title = f'With Lens  —  {dep_fmt} into {tickers_str}'
+            else:
+                b_title = 'With Lens'
+            self._graph_b.set_title(b_title)
+            self._graph_b.plot(hist_days, hist_values, future_days_b, bands_b, median_b,
+                               fan_color='#a256f6', ylim=shared_ylim)
         else:
             self._graph_b.show_no_data('No lens guidance available.')
 
