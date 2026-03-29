@@ -24,18 +24,31 @@ No build step, test suite, or linter is configured.
 | Module | Role |
 |---|---|
 | `main.py` | Entry point — calls `vector.app.main()` |
-| `vector/app.py` | All UI: `VectorMainWindow`, pages (`OnboardingPage`, `MainShell`, `DashboardPage`, `VectorLensPage`, `ProfilePage`, `SettingsPage`), dialogs, shared stylesheets |
+| `vector/app.py` | Thin shell: `DARK_STYLESHEET`, `LIGHT_STYLESHEET`, `MainShell`, `VectorMainWindow`, `main()` — all page classes live in `vector/pages/` |
+| `vector/pages/dashboard.py` | `DashboardPage`, `DashboardGrid`, `WidgetPickerDialog`, grid constants (`_UNIT`, `_GAP`, `_CELL`, `_CONTENT_W`) |
+| `vector/pages/lens_page.py` | `VectorLensPage`, `_GraphCard` (Monte Carlo), `_PieCard` (diversification pie) |
+| `vector/pages/onboarding.py` | `OnboardingPage`, `PositionDialog`, `PositionCard` |
+| `vector/pages/profile.py` | `ProfilePage` |
+| `vector/pages/settings.py` | `SettingsPage`, `_AccordionSection`, `_AnimatedChevron`, `QDoubleSpinBoxCompat` |
 | `vector/analytics.py` | Portfolio math: trend slope, volatility, Sharpe ratio, beta, insight HTML generation |
 | `vector/store.py` | `DataStore` — single source of truth: positions, settings, app state, market data, layout; replaces `storage.py` |
 | `vector/market.py` | Legacy `MarketDataService`; superseded by `DataStore` but may still be referenced |
 | `vector/storage.py` | Legacy `StorageManager`; superseded by `DataStore` |
-| `vector/lens_engine.py` | Lens engine: generates (outlook, action, color) tuples from portfolio state |
+| `vector/lens_engine.py` | `generate_lens()` — computes portfolio state, selects templates, returns 5-tuple |
+| `vector/lens_templates.py` | `_TEMPLATES` dict and `_COLORS` dict (extracted from `lens_engine.py`) |
 | `vector/widget_base.py` | `VectorWidget` — base `QFrame` for all dashboard widgets; handles edit-mode drag, context menu |
 | `vector/widget_registry.py` | `discover_widgets()` / `get_widget_class()` — registry of all concrete widget types |
 | `vector/widget_types/` | 8 concrete widget implementations + `LensDisplay` (see below) |
 | `vector/widgets.py` | Shared UI primitives: `CardFrame`, `GradientBorderFrame`, `GradientLine`, `BlurrableStack`, `DimOverlay`, `EmptyState`, `LoadingButton` |
 | `vector/constants.py` | File paths, TTL constants, default settings values, threshold maps |
 | `vector/paths.py` | `resource_path()` (PyInstaller-aware asset lookup), `user_data_dir()` |
+
+### Pages subpackage (`vector/pages/`)
+
+All page-level QWidget classes live here. `vector/app.py` imports from this subpackage — do not put new page classes directly in `app.py`.
+
+- `_CONTENT_W = 1090` is defined in `pages/dashboard.py` and imported by `pages/lens_page.py` and `pages/settings.py` for consistent fixed-width scroll layout.
+- All three scrollable pages (Dashboard, Lens, Settings) use `setWidgetResizable(False)` + `container.setFixedWidth(_CONTENT_W)` so content width is stable on window resize and the scrollbar sits at the window edge.
 
 ### Widget Types (`vector/widget_types/`)
 
@@ -52,7 +65,7 @@ No build step, test suite, or linter is configured.
 
 ### Vector Lens (`vector/widget_types/lens.py`)
 
-`LensDisplay` is a reusable QFrame (not a VectorWidget) that renders the lens readout with typewriter animation and gradient-highlighted text. It is a **permanent fixture** on the dashboard (cannot be removed or repositioned) and also appears on the dedicated Vector Lens page. The dashboard instance includes a "Vector Lens ›" button that navigates to the full Lens page.
+`LensDisplay` is a reusable QFrame (not a VectorWidget) that renders the "Lens Brief" readout with typewriter animation and gradient-highlighted text. It is a **permanent fixture** on the dashboard (cannot be removed or repositioned) and also appears on the dedicated Vector Lens page. The dashboard instance includes a "Vector Lens ›" button that navigates to the full Lens page.
 
 ### Adding a New Widget
 
@@ -69,7 +82,7 @@ No build step, test suite, or linter is configured.
 2. On startup: load JSON state → show `OnboardingPage` (first run) or `MainShell` (returning).
 3. `MainShell` hosts a sidebar + `QStackedWidget` with `DashboardPage`, `VectorLensPage`, `ProfilePage`, `SettingsPage`.
 4. `DashboardPage` has a permanent `LensDisplay` at the top, followed by a free-form grid of `VectorWidget` instances; grid layout is loaded from / saved to `dashboard_layout.json`.
-5. `DashboardPage.refresh_data()` calls `DataStore.build_histories()` → `compute_portfolio_analytics()` → refreshes the lens and calls `widget.refresh()` on each placed widget.
+5. `DashboardPage.update_dashboard()` calls `compute_portfolio_analytics()` → refreshes the lens and calls `widget.refresh()` on each placed widget.
 6. Edit mode (toolbar button) enables drag-to-reposition and right-click delete on grid widgets (the lens is not affected).
 7. A `QTimer` drives auto-refresh at the interval set in `SettingsPage` (1 min / 5 min / 15 min / manual).
 
@@ -80,6 +93,27 @@ No build step, test suite, or linter is configured.
 - **Sharpe ratio**: Annualised, using a 4.5% risk-free rate, from `portfolio_daily_returns()`.
 - **Beta**: Portfolio covariance / benchmark variance via `portfolio_beta()`.
 - **Insights**: `_direction_insight`, `_volatility_insight`, `_diversification_insight` return rich-text HTML with data-quality warnings when history is sparse.
+
+### Lens Engine (`lens_engine.py` + `lens_templates.py`)
+
+`generate_lens(positions, store, settings)` returns a **5-tuple**: `(text, color, recommended_tickers, deposit_amount, underweight_sector)`.
+
+- `text` — two plain-English sentences covering risk and next-deposit guidance
+- `color` — hex color reflecting portfolio state (from `_COLORS` in `lens_templates.py`)
+- `recommended_tickers` — list of tickers suggested for the next deposit
+- `deposit_amount` — dollar amount to bring the underweight sector to equal weight
+- `underweight_sector` — name of the recommended sector
+
+Template sentence banks (`_TEMPLATES`) and state color map (`_COLORS`) live in `vector/lens_templates.py`; `lens_engine.py` imports them from there.
+
+Action priority: single position → high concentration (stock) → high concentration (sector) → weak/depreciating downtrend → high-vol uptrend → neutral/diversify → hold.
+
+### Monte Carlo (Lens page)
+
+`_GraphCard` in `pages/lens_page.py` renders GBM projections. Key notes:
+- Both Graph A (without lens) and Graph B (with lens) pass `total_equity` as `current_value` to `run_projection` so historical curves normalise to the same base.
+- `new_total` (portfolio + deposit) is used only to compute post-deposit weight proportions for Graph B.
+- matplotlib `FigureCanvasQTAgg` captures wheel events — fixed with `self._canvas.wheelEvent = lambda event: event.ignore()` so scrolling works when the mouse is over a chart.
 
 ### DataStore (`store.py`)
 
@@ -125,11 +159,3 @@ All files live under `%LOCALAPPDATA%/Protonyx/Vector/` (Windows) or `~/Vector/da
 ### Assets
 
 `assets/vector_full.png` and `assets/vector_taskbar.png` are loaded at startup via `resource_path()`. The app falls back to a procedurally generated placeholder if they are missing. Under PyInstaller, `resource_path()` resolves from `sys._MEIPASS`.
-
-### Lens Engine (`lens_engine.py`)
-
-`generate_lens(positions, store, settings)` returns `(text: str, color: str)`.
-
-- Computes per-ticker slope + volatility, then classifies portfolio direction × volatility level.
-- Selects from templated sentence banks using a deterministic hash so the text is stable across refreshes for the same portfolio state.
-- Action priority: single position → high concentration (stock) → high concentration (sector) → weak/depreciating downtrend → high-vol uptrend → neutral/diversify → hold.
