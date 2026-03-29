@@ -1,0 +1,445 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from PyQt6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ..widget_registry import discover_widgets, get_widget_class
+
+if TYPE_CHECKING:
+    from vector.app import VectorMainWindow
+
+# ---------------------------------------------------------------------------
+# Grid constants
+# Toolbar (col 0) = _UNIT px wide. Content grid = 10 cols.
+# Total = _UNIT + _GAP + _CONTENT_W = 90 + 10 + 990 = 1090 px,
+# which fits the 1092 px available at minimum window size.
+# ---------------------------------------------------------------------------
+_UNIT         = 90              # one grid unit in px
+_GAP          = 10              # gap between units
+_CELL         = _UNIT + _GAP   # 100 px — step per cell
+_GRID_COLS    = 11
+_CONTENT_COLS = _GRID_COLS                  # all 11 cols usable
+_CONTENT_W    = _CONTENT_COLS * _CELL - _GAP  # 1090 px
+
+
+# ---------------------------------------------------------------------------
+# _SnapIndicator — ghost overlay shown while dragging
+# ---------------------------------------------------------------------------
+
+class _SnapIndicator(QWidget):
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.hide()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QColor(58, 141, 255, 30))
+        pen = QPen(QColor(58, 141, 255, 160))
+        pen.setWidth(2)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 12, 12)
+        painter.end()
+
+
+# ---------------------------------------------------------------------------
+# DashboardGrid — absolute-positioned content area
+# ---------------------------------------------------------------------------
+
+class DashboardGrid(QWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFixedWidth(_CONTENT_W)
+        self._items: list[dict] = []
+        self._snap = _SnapIndicator(self)
+        self._edit_mode = False
+        self.resize(_CONTENT_W, _CELL)
+
+    @staticmethod
+    def _cell_rect(row: int, col: int, rowspan: int = 1, colspan: int = 1) -> QRect:
+        return QRect(
+            col * _CELL,
+            row * _CELL,
+            colspan * _UNIT + max(0, colspan - 1) * _GAP,
+            rowspan * _UNIT + max(0, rowspan - 1) * _GAP,
+        )
+
+    @staticmethod
+    def _nearest_cell(pos: QPoint, colspan: int = 1) -> tuple[int, int]:
+        col = max(0, min(_CONTENT_COLS - colspan, round(pos.x() / _CELL)))
+        row = max(0, round(pos.y() / _CELL))
+        return row, col
+
+    def _refresh_height(self) -> None:
+        max_bottom = max((i['row'] + i['rowspan'] for i in self._items), default=1)
+        self.resize(_CONTENT_W, max_bottom * _CELL + _GAP)
+
+    def add_widget(self, widget: QWidget, row: int, col: int,
+                   rowspan: int = 1, colspan: int = 1,
+                   fixed: bool = False) -> None:
+        widget.setParent(self)
+        widget.setGeometry(self._cell_rect(row, col, rowspan, colspan))
+        widget.show()
+        self._items.append({'widget': widget, 'row': row, 'col': col,
+                            'rowspan': rowspan, 'colspan': colspan,
+                            'fixed': fixed})
+        self._refresh_height()
+
+    def _occupied_cells(self, exclude: QWidget | None = None) -> set[tuple[int, int]]:
+        occupied: set[tuple[int, int]] = set()
+        for i in self._items:
+            if i['widget'] is exclude:
+                continue
+            for r in range(i['row'], i['row'] + i['rowspan']):
+                for c in range(i['col'], i['col'] + i['colspan']):
+                    occupied.add((r, c))
+        return occupied
+
+    def _find_nearest_free(self, row: int, col: int, rowspan: int, colspan: int,
+                           exclude: QWidget | None = None) -> tuple[int, int]:
+        occupied = self._occupied_cells(exclude)
+
+        def fits(r: int, c: int) -> bool:
+            if c < 0 or c + colspan > _CONTENT_COLS or r < 0:
+                return False
+            return all((r + dr, c + dc) not in occupied
+                       for dr in range(rowspan) for dc in range(colspan))
+
+        if fits(row, col):
+            return row, col
+        for radius in range(1, 60):
+            for dr in range(-radius, radius + 1):
+                for dc in range(-radius, radius + 1):
+                    if fits(row + dr, col + dc):
+                        return row + dr, col + dc
+        return 0, 0
+
+    def next_free_cell(self, rowspan: int = 1, colspan: int = 1) -> tuple[int, int]:
+        occupied = self._occupied_cells()
+
+        def fits(r: int, c: int) -> bool:
+            if c + colspan > _CONTENT_COLS:
+                return False
+            return all((r + dr, c + dc) not in occupied
+                       for dr in range(rowspan) for dc in range(colspan))
+
+        for row in range(50):
+            for col in range(_CONTENT_COLS):
+                if fits(row, col):
+                    return row, col
+        return 0, 0
+
+    def get_layout(self) -> list[dict]:
+        return [
+            {
+                'type': type(i['widget']).__name__,
+                'row': i['row'], 'col': i['col'],
+                'rowspan': i['rowspan'], 'colspan': i['colspan'],
+            }
+            for i in self._items if not i.get('fixed')
+        ]
+
+    def restore_layout(self, layout: list[dict], window) -> None:
+        for entry in layout:
+            cls = get_widget_class(entry['type'])
+            if cls is None:
+                continue
+            widget = cls(window=window)
+            widget.refresh()
+            if self._edit_mode:
+                widget.set_edit_mode(True)
+            self.add_widget(widget, entry['row'], entry['col'],
+                            entry['rowspan'], entry['colspan'])
+
+    def remove_widget(self, widget: QWidget) -> None:
+        self._items = [i for i in self._items if i['widget'] is not widget]
+        widget.setParent(None)
+        widget.deleteLater()
+        self._refresh_height()
+
+    def set_edit_mode(self, enabled: bool) -> None:
+        self._edit_mode = enabled
+        for item in self._items:
+            if item.get('fixed'):
+                continue
+            w = item['widget']
+            if hasattr(w, 'set_edit_mode'):
+                w.set_edit_mode(enabled)
+        if not enabled:
+            self._snap.hide()
+
+    def _on_drag_move(self, widget: QWidget) -> None:
+        item = next((i for i in self._items if i['widget'] is widget), None)
+        if not item:
+            return
+        row, col = self._nearest_cell(widget.pos(), item['colspan'])
+        needed_h = (row + item['rowspan']) * _CELL + _GAP
+        if needed_h > self.height():
+            self.resize(_CONTENT_W, needed_h)
+        self._snap.setGeometry(self._cell_rect(row, col, item['rowspan'], item['colspan']))
+        self._snap.show()
+        self._snap.raise_()
+
+    def _on_drag_release(self, widget: QWidget) -> None:
+        item = next((i for i in self._items if i['widget'] is widget), None)
+        if not item:
+            return
+        row, col = self._nearest_cell(widget.pos(), item['colspan'])
+        row, col = self._find_nearest_free(row, col, item['rowspan'], item['colspan'],
+                                           exclude=widget)
+        item['row'], item['col'] = row, col
+        target = self._cell_rect(row, col, item['rowspan'], item['colspan'])
+        anim = QPropertyAnimation(widget, b'geometry', self)
+        anim.setDuration(140)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.setEndValue(target)
+        anim.start()
+        self._snap.hide()
+        self._refresh_height()
+
+
+# ---------------------------------------------------------------------------
+# _PickerCard + WidgetPickerDialog
+# ---------------------------------------------------------------------------
+
+class _PickerCard(QFrame):
+    def __init__(self, name: str, description: str,
+                 on_click, featured: bool = False,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._on_click = on_click
+        self._featured = featured
+        self.setFixedHeight(64)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 10, 16, 10)
+        layout.setSpacing(12)
+        name_lbl = QLabel(name)
+        name_font = QFont()
+        name_font.setBold(True)
+        name_font.setPointSize(11)
+        name_lbl.setFont(name_font)
+        name_lbl.setStyleSheet('font-size: 11pt;')
+        name_lbl.setFixedWidth(160)
+        name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_lbl = QLabel(description)
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setStyleSheet('color: #8d98af; font-size: 11pt;')
+        layout.addWidget(name_lbl)
+        layout.addWidget(desc_lbl, stretch=1)
+        self._set_style(False)
+
+    def _set_style(self, hovered: bool) -> None:
+        if self._featured:
+            border = '#34a7ff' if not hovered else '#6aaaff'
+            bg = '#131e35' if hovered else '#0f1a2e'
+        else:
+            border = '#34a7ff' if hovered else '#2c364a'
+            bg = '#151e30' if hovered else '#121828'
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {bg};
+                border: {'2px' if self._featured else '1px'} solid {border};
+                border-radius: 12px;
+            }}
+        """)
+
+    def enterEvent(self, event) -> None:  # noqa: N802
+        self._set_style(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self._set_style(False)
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._on_click()
+        super().mousePressEvent(event)
+
+
+class WidgetPickerDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.chosen_class: type | None = None
+        self.setModal(True)
+        self.setWindowTitle('Add Widget')
+        self.setMinimumWidth(440)
+        main_win = QApplication.activeWindow()
+        if main_win is not None:
+            self.setMaximumWidth(main_win.width())
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+        title = QLabel('Choose a widget')
+        title_font = QFont()
+        title_font.setPointSize(15)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title.setStyleSheet('font-size: 15pt;')
+        layout.addWidget(title)
+        sub = QLabel('Select the widget you want to add to your dashboard.')
+        sub.setStyleSheet('color: #8d98af;')
+        sub.setWordWrap(True)
+        layout.addWidget(sub)
+        cards_col = QVBoxLayout()
+        cards_col.setSpacing(8)
+        for cls in discover_widgets():
+            cards_col.addWidget(_PickerCard(
+                cls.NAME, cls.DESCRIPTION,
+                lambda c=cls: self._pick(c),
+            ))
+        layout.addLayout(cards_col)
+        cancel = QPushButton('Cancel')
+        cancel.clicked.connect(self.reject)
+        layout.addWidget(cancel, alignment=Qt.AlignmentFlag.AlignRight)
+
+    def _pick(self, cls: type) -> None:
+        self.chosen_class = cls
+        self.accept()
+
+
+# ---------------------------------------------------------------------------
+# DashboardPage
+# ---------------------------------------------------------------------------
+
+def _circle_btn_style(font_size: int, active: bool = False) -> str:
+    if active:
+        return f"""
+            QPushButton {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #5cc0ff, stop:0.33 #b87af8, stop:0.66 #ea6ed4, stop:1 #fea69c);
+                color: #ffffff;
+                font-size: {font_size}pt;
+                font-weight: 700;
+                border: 2px solid rgba(255,255,255,0.45);
+                border-radius: 32px;
+            }}
+        """
+    return f"""
+        QPushButton {{
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #34a7ff, stop:0.33 #a256f6, stop:0.66 #e34ec6, stop:1 #fd8a83);
+            color: #ffffff;
+            font-size: {font_size}pt;
+            font-weight: 300;
+            border: none;
+            border-radius: 32px;
+        }}
+        QPushButton:hover {{
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #5cc0ff, stop:0.33 #b87af8, stop:0.66 #ea6ed4, stop:1 #fea69c);
+        }}
+        QPushButton:pressed {{
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #2a8fee, stop:0.33 #8a3fd6, stop:0.66 #c63aaa, stop:1 #d9705f);
+        }}
+    """
+
+
+_DEFAULT_LAYOUT = [
+    {'type': 'PortfolioVectorWidget',     'row': 2, 'col': 5,  'rowspan': 3, 'colspan': 6},
+    {'type': 'PositionsListWidget',       'row': 2, 'col': 0,  'rowspan': 3, 'colspan': 5},
+    {'type': 'TotalEquityWidget',         'row': 5, 'col': 0,  'rowspan': 2, 'colspan': 4},
+    {'type': 'PortfolioVolatilityWidget', 'row': 5, 'col': 4,  'rowspan': 2, 'colspan': 4},
+]
+
+
+class DashboardPage(QWidget):
+    def __init__(self, window: 'VectorMainWindow') -> None:
+        super().__init__()
+        self.window = window
+        self._edit_mode = False
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        from vector.widget_types.lens import LensDisplay
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        self._dash_grid = DashboardGrid()
+
+        self._add_btn = QPushButton('+')
+        self._add_btn.setFixedSize(64, 64)
+        self._add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._add_btn.setStyleSheet(_circle_btn_style(28))
+        self._add_btn.clicked.connect(self._open_picker)
+
+        self._edit_btn = QPushButton('Edit')
+        self._edit_btn.setFixedSize(64, 64)
+        self._edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._edit_btn.setStyleSheet(_circle_btn_style(13))
+        self._edit_btn.clicked.connect(self._toggle_edit_mode)
+
+        self._dash_grid.add_widget(self._add_btn, row=0, col=0, fixed=True)
+        self._dash_grid.add_widget(self._edit_btn, row=1, col=0, fixed=True)
+
+        self._lens = LensDisplay(window=self.window, show_button=True)
+        self._lens.open_lens_clicked.connect(self._navigate_to_lens)
+        self._dash_grid.add_widget(self._lens, row=0, col=1, rowspan=2, colspan=10, fixed=True)
+
+        self._scroll = QScrollArea()
+        self._scroll.setWidget(self._dash_grid)
+        self._scroll.setWidgetResizable(False)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        outer.addWidget(self._scroll, stretch=1)
+
+        saved = self.window.store.load_layout()
+        layout = saved if saved else _DEFAULT_LAYOUT
+        layout = [e for e in layout if e.get('type') != 'RecommendationWidget']
+        self._dash_grid.restore_layout(layout, self.window)
+
+    def _navigate_to_lens(self) -> None:
+        shell = self.window.shell
+        if shell:
+            shell.set_page('Vector Lens')
+
+    def save_layout(self) -> None:
+        self.window.store.save_layout(self._dash_grid.get_layout())
+
+    def _open_picker(self) -> None:
+        dialog = WidgetPickerDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.chosen_class:
+            cls = dialog.chosen_class
+            widget = cls(window=self.window)
+            widget.refresh()
+            if self._edit_mode:
+                widget.set_edit_mode(True)
+            row, col = self._dash_grid.next_free_cell(cls.DEFAULT_ROWSPAN, cls.DEFAULT_COLSPAN)
+            self._dash_grid.add_widget(widget, row, col,
+                                       rowspan=cls.DEFAULT_ROWSPAN,
+                                       colspan=cls.DEFAULT_COLSPAN)
+
+    def _toggle_edit_mode(self) -> None:
+        self._edit_mode = not self._edit_mode
+        self._dash_grid.set_edit_mode(self._edit_mode)
+        self._edit_btn.setStyleSheet(_circle_btn_style(13, active=self._edit_mode))
+
+    def update_dashboard(self, positions: list[dict[str, Any]], analytics: dict[str, Any]) -> None:
+        self._lens.refresh()
+        for item in self._dash_grid._items:
+            w = item['widget']
+            if hasattr(w, 'refresh'):
+                w.refresh()

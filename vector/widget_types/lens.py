@@ -159,6 +159,7 @@ class LensDisplay(QFrame):
         self._tw_pos   = 0
         self._recommended_tickers: list[str] = []
         self._deposit_amount: float = 0.0
+        self._underweight_sector: str = ''
 
         self.setStyleSheet('background: transparent; border: none;')
 
@@ -167,7 +168,7 @@ class LensDisplay(QFrame):
         card_layout.setContentsMargins(28, 24, 28, 24)
         card_layout.setSpacing(10)
 
-        title_lbl = QLabel('Lens')
+        title_lbl = QLabel('Lens Brief')
         title_lbl.setFont(_font(16, bold=True))
         title_lbl.setStyleSheet('color: #e7ebf3; font-size: 16pt; border: none;')
         card_layout.addWidget(title_lbl)
@@ -330,18 +331,24 @@ class LensDisplay(QFrame):
 
         try:
             result = generate_lens(positions, store, settings)
-            if len(result) == 4:
+            if len(result) == 5:
+                text, _color, self._recommended_tickers, self._deposit_amount, self._underweight_sector = result
+            elif len(result) == 4:
                 text, _color, self._recommended_tickers, self._deposit_amount = result
+                self._underweight_sector = ''
             elif len(result) == 3:
                 text, _color, self._recommended_tickers = result
                 self._deposit_amount = 0.0
+                self._underweight_sector = ''
             else:
                 text, _color = result
                 self._recommended_tickers = []
                 self._deposit_amount = 0.0
+                self._underweight_sector = ''
         except Exception:  # noqa: BLE001
             text = "Unable to generate a lens insight right now. Check your positions and try refreshing."
             self._recommended_tickers = []
             self._deposit_amount = 0.0
+            self._underweight_sector = ''
 
         self._start_typewrite(text)

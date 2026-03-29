@@ -1,0 +1,333 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from PyQt6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, Qt, pyqtProperty
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QScrollArea,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ..constants import APP_NAME, APP_VERSION, COMPANY_NAME, VOLATILITY_LOOKBACK_PERIODS
+from ..widgets import CardFrame, LoadingButton
+from .dashboard import _CONTENT_W
+
+if TYPE_CHECKING:
+    from vector.app import VectorMainWindow
+
+
+class _AnimatedChevron(QWidget):
+    """Small chevron icon that rotates smoothly between 0° (›) and 90° (⌄)."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._angle = 0.0
+        self.setFixedSize(22, 22)
+        self._anim = QPropertyAnimation(self, b'angle')
+        self._anim.setDuration(260)
+        self._anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+    def get_angle(self) -> float:
+        return self._angle
+
+    def set_angle(self, value: float) -> None:
+        self._angle = value
+        self.update()
+
+    angle = pyqtProperty(float, get_angle, set_angle)
+
+    def animate_to(self, target: float) -> None:
+        self._anim.stop()
+        self._anim.setStartValue(self._angle)
+        self._anim.setEndValue(target)
+        self._anim.start()
+
+    def paintEvent(self, _event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.translate(11.0, 11.0)
+        painter.rotate(self._angle)
+        pen = QPen(QColor('#8d98af'), 2.0, Qt.PenStyle.SolidLine,
+                   Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        # Draw a right-pointing chevron ›; rotated 90° it becomes ⌄
+        painter.drawLine(QPointF(-3.0, -5.0), QPointF(3.5, 0.0))
+        painter.drawLine(QPointF(3.5, 0.0), QPointF(-3.0, 5.0))
+
+
+class _AccordionSection(CardFrame):
+    """
+    Collapsible settings card with an animated chevron and smooth height expansion.
+    Collapsed by default; clicking the header toggles open/closed.
+    """
+
+    def __init__(self, title: str, parent=None) -> None:
+        super().__init__(parent)
+        self._open = False
+        self._natural_h = 0
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── Header ───────────────────────────────────────────────────────
+        # Use QFrame (not QPushButton) so child widgets render correctly.
+        self._header = QFrame()
+        self._header.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._header.setStyleSheet('border: none; background: transparent;')
+        self._header.mousePressEvent = self._header_clicked
+
+        header_row = QHBoxLayout(self._header)
+        header_row.setContentsMargins(20, 18, 20, 18)
+        header_row.setSpacing(12)
+
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet('font-size: 16pt; font-weight: 700; background: transparent; border: none;')
+        self._chevron = _AnimatedChevron()
+
+        header_row.addWidget(title_lbl)
+        header_row.addStretch(1)
+        header_row.addWidget(self._chevron)
+        root.addWidget(self._header)
+
+        # ── Content wrapper (height-animated) ────────────────────────────
+        self._content = QWidget()
+        self._content.setMaximumHeight(0)
+        self._content.setMinimumHeight(0)
+
+        inner = QVBoxLayout(self._content)
+        inner.setContentsMargins(20, 4, 20, 18)
+        inner.setSpacing(0)
+        self._form = QFormLayout()
+        self._form.setSpacing(12)
+        inner.addLayout(self._form)
+        root.addWidget(self._content)
+
+        # ── Height animation ──────────────────────────────────────────────
+        self._anim = QPropertyAnimation(self._content, b'maximumHeight')
+        self._anim.setDuration(280)
+        self._anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._anim.finished.connect(self._on_finished)
+
+    def form(self) -> QFormLayout:
+        return self._form
+
+    def _header_clicked(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._toggle()
+
+    def _measure(self) -> int:
+        self._content.setMaximumHeight(16_777_215)
+        h = self._content.sizeHint().height()
+        self._content.setMaximumHeight(0)
+        return max(h, 32)
+
+    def _toggle(self) -> None:
+        if self._anim.state() == QPropertyAnimation.State.Running:
+            return
+        self._open = not self._open
+        if self._open:
+            if not self._natural_h:
+                self._natural_h = self._measure()
+            self._anim.setStartValue(0)
+            self._anim.setEndValue(self._natural_h)
+            self._chevron.animate_to(90.0)
+        else:
+            self._anim.setStartValue(self._content.height())
+            self._anim.setEndValue(0)
+            self._chevron.animate_to(0.0)
+        self._anim.start()
+
+    def _on_finished(self) -> None:
+        if self._open:
+            self._content.setMaximumHeight(16_777_215)
+
+
+class QDoubleSpinBoxCompat(QSpinBox):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setSingleStep(1)
+        self.setRange(-100, 100)
+        self.setSuffix('%')
+
+    def value(self) -> float:  # type: ignore[override]
+        return super().value() / 100
+
+    def setValue(self, value: float) -> None:  # type: ignore[override]
+        super().setValue(int(round(value * 100)))
+
+
+class SettingsPage(QWidget):
+    def __init__(self, window: 'VectorMainWindow') -> None:
+        super().__init__()
+        self.window = window
+        self.remove_list = QListWidget()
+        self.remove_list.setMinimumHeight(200)
+        self._build_ui()
+
+    def _add_section(self, parent: QVBoxLayout, title: str) -> QFormLayout:
+        card = CardFrame()
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 20, 20, 20)
+        heading = QLabel(title)
+        heading.setStyleSheet('font-size: 16pt; font-weight: 700;')
+        layout.addWidget(heading)
+        form = QFormLayout()
+        form.setSpacing(12)
+        layout.addLayout(form)
+        parent.addWidget(card)
+        return form
+
+    def _add_accordion(self, parent: QVBoxLayout, title: str) -> QFormLayout:
+        section = _AccordionSection(title)
+        parent.addWidget(section)
+        return section.form()
+
+    def _build_ui(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(False)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        container = QWidget()
+        container.setFixedWidth(_CONTENT_W)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 8, 0, 24)
+        layout.setSpacing(16)
+
+        general = self._add_section(layout, 'General')
+        self.theme_combo = QComboBox(); self.theme_combo.addItems(['Dark', 'Light'])
+        self.currency_combo = QComboBox(); self.currency_combo.addItems(['USD', 'EUR', 'GBP'])
+        self.date_combo = QComboBox(); self.date_combo.addItems(['MM/DD/YYYY', 'DD/MM/YYYY'])
+        general.addRow('Theme', self.theme_combo)
+        general.addRow('Default Currency', self.currency_combo)
+        general.addRow('Date Format', self.date_combo)
+
+        refresh = self._add_accordion(layout, 'Data & Refresh')
+        self.refresh_combo = QComboBox(); self.refresh_combo.addItems(['1 min', '5 min', '15 min', 'Manual only'])
+        clear_cache_button = LoadingButton('Clear Cached Price Data')
+        clear_cache_button.clicked.connect(self.window.clear_cache)
+        reset_button = LoadingButton('Reset All App Data / Re-run Onboarding')
+        reset_button.clicked.connect(self.window.reset_all_data)
+        refresh.addRow('Auto-refresh Interval', self.refresh_combo)
+        refresh.addRow('', clear_cache_button)
+        refresh.addRow('', reset_button)
+
+        thresholds = self._add_accordion(layout, 'Portfolio Direction Thresholds')
+        self.strong_spin = self._spin_box(); self.strong_spin.setRange(-100, 100)
+        self.steady_spin = self._spin_box(); self.steady_spin.setRange(-100, 100)
+        self.neutral_low_spin = self._spin_box(); self.neutral_low_spin.setRange(-100, 100)
+        self.neutral_high_spin = self._spin_box(); self.neutral_high_spin.setRange(-100, 100)
+        self.depreciating_spin = self._spin_box(); self.depreciating_spin.setRange(-100, 100)
+        thresholds.addRow('Strong cutoff (%)', self.strong_spin)
+        thresholds.addRow('Steady cutoff (%)', self.steady_spin)
+        thresholds.addRow('Neutral low (%)', self.neutral_low_spin)
+        thresholds.addRow('Neutral high (%)', self.neutral_high_spin)
+        thresholds.addRow('Weak cutoff (%)', self.depreciating_spin)
+
+        volatility = self._add_accordion(layout, 'Volatility')
+        self.lookback_combo = QComboBox(); self.lookback_combo.addItems(['3 months', '6 months', '1 year'])
+        self.low_vol_spin = QSpinBox(); self.low_vol_spin.setRange(1, 100)
+        self.high_vol_spin = QSpinBox(); self.high_vol_spin.setRange(1, 100)
+        volatility.addRow('Lookback Period', self.lookback_combo)
+        volatility.addRow('Low cutoff', self.low_vol_spin)
+        volatility.addRow('High cutoff', self.high_vol_spin)
+
+        positions = self._add_section(layout, 'Positions')
+        add_position = LoadingButton('Add New Position')
+        add_position.clicked.connect(self.window.add_position_from_settings)
+        remove_button = LoadingButton('Remove Selected Position')
+        remove_button.clicked.connect(self.remove_selected_position)
+        positions.addRow('', add_position)
+        positions.addRow('Current Positions', self.remove_list)
+        positions.addRow('', remove_button)
+
+        about = self._add_section(layout, 'About')
+        about.addRow('App Version', QLabel(APP_VERSION))
+        about.addRow('Brand', QLabel(f'{COMPANY_NAME} / {APP_NAME}'))
+        about.addRow('Credits', QLabel('PyQt6, Yahoo Finance (yfinance)'))
+
+        self.save_button = LoadingButton('Save Settings')
+        self.save_button.setProperty('accent', True)
+        self.save_button.clicked.connect(self.save_settings)
+        layout.addWidget(self.save_button, alignment=Qt.AlignmentFlag.AlignRight)
+        layout.addStretch(1)
+        scroll.setWidget(container)
+        outer.addWidget(scroll, stretch=1)
+
+    def _spin_box(self) -> QDoubleSpinBoxCompat:
+        return QDoubleSpinBoxCompat()
+
+    def load_from_settings(self, settings: dict[str, Any], positions: list[dict[str, Any]]) -> None:
+        self.theme_combo.setCurrentText(settings['theme'])
+        self.currency_combo.setCurrentText(settings['currency'])
+        self.date_combo.setCurrentText(settings['date_format'])
+        self.refresh_combo.setCurrentText(settings['refresh_interval'])
+        thresholds = settings['direction_thresholds']
+        self.strong_spin.setValue(float(thresholds['strong']))
+        self.steady_spin.setValue(float(thresholds['steady']))
+        self.neutral_low_spin.setValue(float(thresholds['neutral_low']))
+        self.neutral_high_spin.setValue(float(thresholds['neutral_high']))
+        self.depreciating_spin.setValue(float(thresholds['depreciating']))
+        vol = settings['volatility']
+        self.lookback_combo.setCurrentText(vol['lookback'])
+        self.low_vol_spin.setValue(int(vol['low_cutoff']))
+        self.high_vol_spin.setValue(int(vol['high_cutoff']))
+        self.remove_list.clear()
+        for position in positions:
+            item = QListWidgetItem(f"{position['ticker']} — {position['shares']:.4f}".rstrip('0').rstrip('.'))
+            item.setData(Qt.ItemDataRole.UserRole, position['ticker'])
+            self.remove_list.addItem(item)
+
+    def save_settings(self) -> None:
+        self.save_button.start_loading('Saving...')
+        QApplication.processEvents()
+        settings = self.window.settings
+        settings['theme'] = self.theme_combo.currentText()
+        settings['currency'] = self.currency_combo.currentText()
+        settings['date_format'] = self.date_combo.currentText()
+        settings['refresh_interval'] = self.refresh_combo.currentText()
+        settings['direction_thresholds'] = {
+            'strong': self.strong_spin.value(),
+            'steady': self.steady_spin.value(),
+            'neutral_low': self.neutral_low_spin.value(),
+            'neutral_high': self.neutral_high_spin.value(),
+            'depreciating': self.depreciating_spin.value(),
+        }
+        settings['volatility'] = {
+            'lookback': self.lookback_combo.currentText(),
+            'lookback_period': VOLATILITY_LOOKBACK_PERIODS[self.lookback_combo.currentText()],
+            'low_cutoff': self.low_vol_spin.value(),
+            'high_cutoff': self.high_vol_spin.value(),
+        }
+        self.window.settings = settings
+        self.window.store.save_settings(settings)
+        self.window.apply_theme()
+        self.window.refresh_data()
+        self.save_button.stop_loading('Save Settings')
+
+    def remove_selected_position(self) -> None:
+        item = self.remove_list.currentItem()
+        if not item:
+            return
+        ticker = item.data(Qt.ItemDataRole.UserRole)
+        confirm = QMessageBox.question(self, 'Remove Position', f'Remove {ticker} from the portfolio?')
+        if confirm == QMessageBox.StandardButton.Yes:
+            self.window.positions = [position for position in self.window.positions if position['ticker'] != ticker]
+            self.window.store.save_positions(self.window.positions)
+            self.window.refresh_data()
+            self.load_from_settings(self.window.settings, self.window.positions)

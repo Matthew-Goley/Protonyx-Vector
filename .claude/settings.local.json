@@ -30,7 +30,9 @@
       "Bash(.venv/Scripts/python -c \":*)",
       "Bash(.venv/Scripts/python -c \"import matplotlib; import numpy; print\\(matplotlib.__version__, numpy.__version__\\)\")",
       "Bash(.venv/Scripts/pip install:*)",
-      "Bash(.venv/Scripts/python -c \"import matplotlib, numpy; print\\(''matplotlib'', matplotlib.__version__, ''numpy'', numpy.__version__\\)\")"
+      "Bash(.venv/Scripts/python -c \"import matplotlib, numpy; print\\(''matplotlib'', matplotlib.__version__, ''numpy'', numpy.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from vector.lens_templates import _TEMPLATES, _COLORS; print\\(''OK'', len\\(_TEMPLATES\\), ''states,'', len\\(_COLORS\\), ''colors''\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from vector.lens_engine import generate_lens; print\\(''lens_engine OK''\\)\")"
     ]
   }
 }
