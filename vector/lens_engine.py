@@ -656,6 +656,15 @@ def _sector_ticker_hint(sector: str, held_tickers: set[str], n: int = 3) -> str:
     return '(' + ', '.join(picks) + ')'
 
 
+def _sector_ticker_list(sector: str, held_tickers: set[str], n: int = 3) -> list[str]:
+    """Return a list of ticker suggestions for a sector, excluding already-held tickers."""
+    candidates = _SECTOR_TICKERS.get(sector, [])
+    picks = [t for t in candidates if t not in held_tickers][:n]
+    if not picks:
+        picks = candidates[:n]
+    return picks
+
+
 def _underweight_sector(held_sectors: set[str], sector_weights: dict[str, float]) -> str:
     """
     Return the best sector to add next:
@@ -687,10 +696,12 @@ def generate_lens(
     positions: list[dict[str, Any]],
     store,
     settings: dict[str, Any],
-) -> tuple[str, str]:
+) -> tuple[str, str, list[str]]:
     """
-    Returns (text, color) where text is exactly two sentences covering
-    risk, position awareness, and next-deposit guidance.
+    Returns (text, color, recommended_tickers) where:
+      text                 — two sentences covering risk and next-deposit guidance
+      color                — hex color reflecting portfolio state
+      recommended_tickers  — list of tickers suggested for the next deposit
     """
     from vector.analytics import (
         linear_regression_slope_percent,
@@ -706,6 +717,7 @@ def generate_lens(
             "Add your first position to get personalised guidance tailored to your actual holdings. "
             "Go to Settings and add a stock or ETF ticker to get started.",
             "#8d98af",
+            [],
         )
 
     refresh_interval = settings.get('refresh_interval', '5 min')
@@ -851,4 +863,9 @@ def generate_lens(
         s1 = "Your portfolio is being tracked — check back after a full refresh for personalised guidance."
         s2 = "Make sure your positions have up-to-date price data for the best insights."
 
-    return s1 + "  " + s2, color
+    # Tickers to suggest for the next deposit (used by Monte Carlo Graph B)
+    recommended_tickers = _sector_ticker_list(underweight, held_tickers)
+    if not recommended_tickers:
+        recommended_tickers = sorted(slopes, key=slopes.get, reverse=True)[:3]
+
+    return s1 + "  " + s2, color, recommended_tickers

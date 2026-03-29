@@ -27,7 +27,10 @@
       "Bash(.venv/Scripts/python -m py_compile vector/widget_types/recommendation.py)",
       "Bash(.venv/Scripts/python -m py_compile vector/constants.py)",
       "Bash(.venv/Scripts/python -c \"from vector.app import main; print\\(''OK''\\)\")",
-      "Bash(.venv/Scripts/python -c \":*)"
+      "Bash(.venv/Scripts/python -c \":*)",
+      "Bash(.venv/Scripts/python -c \"import matplotlib; import numpy; print\\(matplotlib.__version__, numpy.__version__\\)\")",
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(.venv/Scripts/python -c \"import matplotlib, numpy; print\\(''matplotlib'', matplotlib.__version__, ''numpy'', numpy.__version__\\)\")"
     ]
   }
 }

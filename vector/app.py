@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -1308,8 +1309,152 @@ class QDoubleSpinBoxCompat(QSpinBox):
         super().setValue(int(round(value * 100)))
 
 
+class _GraphCard(QFrame):
+    """
+    Card widget containing a title label and a lazy matplotlib projection graph.
+    The canvas is created on first call to plot() to avoid importing matplotlib
+    at startup.
+    """
+
+    def __init__(self, title: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName('cardFrame')
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(32)
+        shadow.setOffset(0, 10)
+        shadow.setColor(QColor(0, 0, 0, 80))
+        self.setGraphicsEffect(shadow)
+
+        self._outer = QVBoxLayout(self)
+        self._outer.setContentsMargins(16, 16, 16, 12)
+        self._outer.setSpacing(10)
+
+        title_lbl = QLabel(title)
+        f = QFont()
+        f.setPointSize(12)
+        f.setBold(True)
+        title_lbl.setFont(f)
+        title_lbl.setStyleSheet('font-size: 12pt; font-weight: 700;')
+        self._outer.addWidget(title_lbl)
+
+        self._placeholder = QLabel('Loading projection…')
+        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._placeholder.setStyleSheet('color: #8d98af; font-size: 11pt;')
+        self._placeholder.setMinimumHeight(280)
+        self._outer.addWidget(self._placeholder, stretch=1)
+
+        self._canvas = None
+        self._ax = None
+        self._fig = None
+
+    # ------------------------------------------------------------------
+
+    def _ensure_canvas(self) -> None:
+        if self._canvas is not None:
+            return
+        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+        from matplotlib.figure import Figure
+        self._fig = Figure(facecolor='#161b26')
+        self._fig.subplots_adjust(left=0.04, right=0.86, top=0.95, bottom=0.14)
+        self._ax = self._fig.add_subplot(111)
+        self._canvas = FigureCanvasQTAgg(self._fig)
+        self._canvas.setMinimumHeight(280)
+        self._placeholder.hide()
+        self._outer.addWidget(self._canvas, stretch=1)
+
+    def show_no_data(self, msg: str = 'Insufficient data for projection') -> None:
+        self._placeholder.setText(msg)
+        self._placeholder.show()
+        if self._canvas is not None:
+            self._canvas.hide()
+
+    def plot(
+        self,
+        hist_days: list[int],
+        hist_values: list[float],
+        future_days: list[int],
+        bands: dict,
+        median: 'Any',
+        fan_color: str = '#34a7ff',
+    ) -> None:
+        """Draw historical curve + Monte Carlo fan on the embedded axes."""
+        import numpy as np
+        from matplotlib.ticker import FuncFormatter
+
+        self._ensure_canvas()
+        if self._canvas is not None:
+            self._canvas.show()
+        self._placeholder.hide()
+
+        ax = self._ax
+        ax.clear()
+
+        # --- Dark theme ---
+        ax.set_facecolor('#121828')
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        ax.tick_params(axis='both', colors='#8d98af', labelsize=8)
+        ax.grid(True, color='#2a3142', alpha=0.5, linewidth=0.5, zorder=0)
+
+        # Ticks on right for y-axis
+        ax.yaxis.tick_right()
+        ax.yaxis.set_label_position('right')
+
+        # --- Historical curve ---
+        today_value = float(median[0]) if median is not None and len(median) else (
+            hist_values[-1] if hist_values else 0.0
+        )
+        if hist_days and hist_values:
+            ax.plot(
+                list(hist_days) + [0],
+                list(hist_values) + [today_value],
+                color='#34a7ff', lw=1.5, zorder=3,
+            )
+
+        # --- Today vertical line ---
+        ax.axvline(x=0, color='#8d98af', lw=1.0, ls='--', alpha=0.55, zorder=2)
+
+        # --- Monte Carlo percentile fan ---
+        if bands and future_days:
+            alphas = {(10, 90): 0.12, (25, 75): 0.22, (40, 60): 0.35}
+            fd = np.array(future_days)
+            for band_key in [(10, 90), (25, 75), (40, 60)]:
+                if band_key in bands:
+                    lo_arr, hi_arr = bands[band_key]
+                    ax.fill_between(
+                        fd, lo_arr, hi_arr,
+                        alpha=alphas[band_key], color=fan_color, zorder=1,
+                        linewidth=0,
+                    )
+
+            # Dashed median path
+            if median is not None:
+                ax.plot(
+                    fd, median,
+                    color=fan_color, lw=1.5, ls='--', alpha=0.9, zorder=3,
+                )
+
+        # --- Y-axis dollar formatter ---
+        def _fmt(v: float, _pos: int) -> str:
+            if v >= 1_000_000:
+                return f'${v / 1_000_000:.1f}M'
+            if v >= 1_000:
+                return f'${v / 1_000:.0f}K'
+            return f'${v:.0f}'
+
+        ax.yaxis.set_major_formatter(FuncFormatter(_fmt))
+
+        # --- X-axis ticks ---
+        xticks = [0, 21, 42, 63, 84, 105]
+        xlabels = ['Today', '1m', '2m', '3m', '4m', '5m']
+        ax.set_xticks(xticks)
+        ax.set_xticklabels(xlabels, color='#8d98af', fontsize=8)
+
+        self._canvas.draw()
+
+
 class VectorLensPage(QWidget):
-    """Dedicated page for the Vector Lens — accessible from sidebar or dashboard button."""
+    """Dedicated page for Vector Lens — projection graphs below the lens readout."""
 
     def __init__(self, window: 'VectorMainWindow') -> None:
         super().__init__()
@@ -1319,18 +1464,114 @@ class VectorLensPage(QWidget):
     def _build_ui(self) -> None:
         from vector.widget_types.lens import LensDisplay
 
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Scroll area so graphs don't get clipped at small window heights
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
+        # Lens readout (same as dashboard, no nav button)
         self._lens = LensDisplay(window=self.window, show_button=False)
         self._lens.setFixedHeight(200)
         layout.addWidget(self._lens)
 
+        # Two projection graph cards side by side
+        graphs_row = QWidget()
+        graphs_layout = QHBoxLayout(graphs_row)
+        graphs_layout.setContentsMargins(0, 0, 0, 0)
+        graphs_layout.setSpacing(16)
+
+        self._graph_a = _GraphCard('Current Portfolio')
+        self._graph_b = _GraphCard('With Lens')
+        graphs_layout.addWidget(self._graph_a)
+        graphs_layout.addWidget(self._graph_b)
+        layout.addWidget(graphs_row)
+
         layout.addStretch(1)
+        scroll.setWidget(container)
+        outer.addWidget(scroll)
 
     def refresh(self) -> None:
         self._lens.refresh()
+        recommended_tickers = list(getattr(self._lens, '_recommended_tickers', []))
+        self._update_graphs(recommended_tickers)
+
+    def _update_graphs(self, recommended_tickers: list[str]) -> None:
+        from vector.monte_carlo import build_historical_curve, run_projection
+
+        positions = self.window.positions or []
+        store = self.window.store
+        settings = self.window.settings
+        refresh_interval = settings.get('refresh_interval', '5 min')
+
+        if not positions:
+            self._graph_a.show_no_data('Add positions to see projections.')
+            self._graph_b.show_no_data('Add positions to see projections.')
+            return
+
+        total_equity = sum(p.get('equity', 0.0) for p in positions) or 1.0
+        tickers = [p['ticker'] for p in positions]
+        weights = [p.get('equity', 0.0) / total_equity for p in positions]
+
+        # Shared historical equity curve
+        hist_days, hist_values = build_historical_curve(
+            positions, store, refresh_interval, num_days=60,
+        )
+
+        # --- Graph A: current portfolio ---
+        try:
+            result_a = run_projection(tickers, weights, total_equity, store, refresh_interval)
+        except Exception:  # noqa: BLE001
+            result_a = None
+
+        if result_a is not None:
+            future_days, bands_a, median_a = result_a
+            self._graph_a.plot(hist_days, hist_values, future_days, bands_a, median_a,
+                               fan_color='#34a7ff')
+        else:
+            self._graph_a.show_no_data('Insufficient history for projection.')
+
+        # --- Graph B: with lens deposit (+10% into recommended tickers) ---
+        if recommended_tickers:
+            deposit = 0.1 * total_equity
+            per_ticker = deposit / len(recommended_tickers)
+            new_total = total_equity + deposit
+
+            equity_map: dict[str, float] = {p['ticker']: p.get('equity', 0.0) for p in positions}
+            for t in recommended_tickers:
+                equity_map[t] = equity_map.get(t, 0.0) + per_ticker
+
+            all_tickers = list(equity_map.keys())
+            all_weights = [equity_map[t] / new_total for t in all_tickers]
+
+            try:
+                result_b = run_projection(all_tickers, all_weights, new_total, store,
+                                          refresh_interval)
+            except Exception:  # noqa: BLE001
+                result_b = None
+        else:
+            result_b = None
+
+        if result_b is not None:
+            future_days_b, bands_b, median_b = result_b
+            self._graph_b.plot(hist_days, hist_values, future_days_b, bands_b, median_b,
+                               fan_color='#a256f6')
+        elif result_a is not None:
+            # No specific guidance — mirror Graph A in the lens colour
+            future_days, bands_a, median_a = result_a
+            self._graph_b.plot(hist_days, hist_values, future_days, bands_a, median_a,
+                               fan_color='#a256f6')
+        else:
+            self._graph_b.show_no_data('No lens guidance available.')
 
 
 class MainShell(QWidget):

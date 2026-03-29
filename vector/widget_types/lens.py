@@ -157,6 +157,7 @@ class LensDisplay(QFrame):
         self._tw_plain = ''
         self._tw_html  = ''
         self._tw_pos   = 0
+        self._recommended_tickers: list[str] = []
 
         self.setStyleSheet('background: transparent; border: none;')
 
@@ -328,12 +329,13 @@ class LensDisplay(QFrame):
 
         try:
             result = generate_lens(positions, store, settings)
-            if len(result) == 2:
-                text, _color = result
+            if len(result) == 3:
+                text, _color, self._recommended_tickers = result
             else:
-                s1, s2, _color = result
-                text = s1 + "  " + s2
+                text, _color = result
+                self._recommended_tickers = []
         except Exception:  # noqa: BLE001
             text = "Unable to generate a lens insight right now. Check your positions and try refreshing."
+            self._recommended_tickers = []
 
         self._start_typewrite(text)
