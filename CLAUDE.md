@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Vector** is a PyQt6 desktop portfolio analytics app for stock investors. It tracks positions, fetches market data via Yahoo Finance (yfinance), and displays analytics (trend direction, volatility, sector allocation, Sharpe ratio, beta, dividends) in a customisable dark/light themed dashboard. Data is persisted locally in `%LOCALAPPDATA%/Protonyx/Vector/` (falls back to `~/Vector/data/`) as JSON files.
 
+Current version: **0.3.5**
+
 ## Setup & Running
 
 ```bash
@@ -16,6 +18,15 @@ python main.py
 ```
 
 No build step, test suite, or linter is configured.
+
+## Building (Nuitka)
+
+```bash
+python -m nuitka --standalone --windows-console-mode=disable --enable-plugin=pyqt6 --output-filename="Vector-v0.3.5.exe" --include-data-dir=assets=assets main.py
+```
+
+- `--include-data-dir=assets=assets` copies the entire `assets/` folder next to the exe
+- `resource_path()` automatically resolves assets correctly in all three environments: dev, PyInstaller, and Nuitka standalone (see `vector/paths.py`)
 
 ## Architecture
 
@@ -41,7 +52,7 @@ No build step, test suite, or linter is configured.
 | `vector/widget_types/` | 8 concrete widget implementations + `LensDisplay` (see below) |
 | `vector/widgets.py` | Shared UI primitives: `CardFrame`, `GradientBorderFrame`, `GradientLine`, `BlurrableStack`, `DimOverlay`, `EmptyState`, `LoadingButton` |
 | `vector/constants.py` | File paths, TTL constants, default settings values, threshold maps |
-| `vector/paths.py` | `resource_path()` (PyInstaller-aware asset lookup), `user_data_dir()` |
+| `vector/paths.py` | `resource_path()` (PyInstaller + Nuitka-aware asset lookup), `user_data_dir()`, `user_file()` |
 
 ### Pages subpackage (`vector/pages/`)
 
@@ -75,6 +86,17 @@ All page-level QWidget classes live here. `vector/app.py` imports from this subp
 4. Override `refresh(self)` to update the display when data changes
 5. Register it in `vector/widget_registry.py` by importing and adding to `_WIDGETS`
 6. `window` arg gives access to `window.store`, `window.positions`, `window.settings`
+
+### Startup & Splash Screen
+
+`main()` in `vector/app.py` follows this exact sequence:
+
+1. `QApplication` is created and the taskbar icon is set.
+2. `assets/splashboard.png` is loaded and displayed immediately as a `QSplashScreen` (700×400 px, centred on the primary screen, always-on-top) — this is the **first thing the user sees**.
+3. `app.processEvents()` forces the OS to paint the splash before any heavy work begins.
+4. `VectorMainWindow()` is constructed (loads data, builds UI) while the splash remains visible.
+5. The splash is shown for a **minimum of 2 seconds** total. If construction finishes in under 2 s, a `QTimer` waits out the remainder. If it takes longer, the splash closes immediately after.
+6. `splash.finish(window)` closes the splash and `window.show()` reveals the main window.
 
 ### Data Flow
 
@@ -113,6 +135,7 @@ Action priority: single position → high concentration (stock) → high concent
 `_GraphCard` in `pages/lens_page.py` renders GBM projections. Key notes:
 - Both Graph A (without lens) and Graph B (with lens) pass `total_equity` as `current_value` to `run_projection` so historical curves normalise to the same base.
 - `new_total` (portfolio + deposit) is used only to compute post-deposit weight proportions for Graph B.
+- Projections display percentage change relative to current equity, not raw dollar values.
 - matplotlib `FigureCanvasQTAgg` captures wheel events — fixed with `self._canvas.wheelEvent = lambda event: event.ignore()` so scrolling works when the mouse is over a chart.
 
 ### DataStore (`store.py`)
@@ -158,4 +181,17 @@ All files live under `%LOCALAPPDATA%/Protonyx/Vector/` (Windows) or `~/Vector/da
 
 ### Assets
 
-`assets/vector_full.png` and `assets/vector_taskbar.png` are loaded at startup via `resource_path()`. The app falls back to a procedurally generated placeholder if they are missing. Under PyInstaller, `resource_path()` resolves from `sys._MEIPASS`.
+All assets live in `assets/` and are loaded via `resource_path()`:
+
+| File | Purpose |
+|---|---|
+| `assets/vector_full.png` | Full logo used in the UI |
+| `assets/vector_taskbar.png` | Taskbar / window icon |
+| `assets/splashboard.png` | Splash screen image (1400×800 source, displayed at 700×400) |
+
+`resource_path()` in `vector/paths.py` handles three environments:
+- **Dev**: resolves relative to the repo root (`Path(__file__).parent.parent`)
+- **PyInstaller**: resolves from `sys._MEIPASS`
+- **Nuitka standalone**: resolves from `Path(sys.executable).parent` (detected via `sys.frozen`)
+
+The app falls back to a procedurally generated placeholder logo if `vector_full.png` or `vector_taskbar.png` are missing. The splash screen is silently skipped if `splashboard.png` is missing (pixmap will be null).
