@@ -8,7 +8,11 @@ from pathlib import Path
 def resource_path(*parts: str) -> Path:
     """Return absolute path to a bundled read-only resource."""
     if hasattr(sys, "_MEIPASS"):
+        # PyInstaller standalone
         base = Path(sys._MEIPASS)
+    elif getattr(sys, "frozen", False):
+        # Nuitka standalone — assets are placed next to the executable
+        base = Path(sys.executable).parent
     else:
         base = Path(__file__).resolve().parent.parent
     return base.joinpath(*parts)

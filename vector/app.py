@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from datetime import datetime
 from functools import partial
 from typing import Any
@@ -524,8 +525,6 @@ class VectorMainWindow(QMainWindow):
 
 
 def main() -> int:
-    import time
-
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     taskbar_pixmap = QPixmap(str(TASKBAR_LOGO_PATH))
