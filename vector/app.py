@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QSplashScreen,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -23,6 +24,7 @@ from PyQt6.QtWidgets import (
 
 from .analytics import compute_portfolio_analytics
 from .constants import APP_NAME, APP_VERSION, COMPANY_NAME, LOGO_PATH, TASKBAR_LOGO_PATH, VOLATILITY_LOOKBACK_PERIODS
+from .paths import resource_path
 from .pages.dashboard import DashboardPage
 from .pages.lens_page import VectorLensPage
 from .pages.onboarding import OnboardingPage, PositionDialog
@@ -522,10 +524,36 @@ class VectorMainWindow(QMainWindow):
 
 
 def main() -> int:
+    import time
+
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     taskbar_pixmap = QPixmap(str(TASKBAR_LOGO_PATH))
     app.setWindowIcon(QIcon(taskbar_pixmap if not taskbar_pixmap.isNull() else VectorMainWindow.create_placeholder_logo(128)))
+
+    # --- Splash: show before anything else loads ---
+    splash_pixmap = QPixmap(str(resource_path('assets', 'splashboard.png')))
+    if not splash_pixmap.isNull():
+        splash_pixmap = splash_pixmap.scaled(700, 400, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    splash = QSplashScreen(splash_pixmap, Qt.WindowType.WindowStaysOnTopHint)
+    splash.setFixedSize(700, 400)
+    screen_geo = app.primaryScreen().geometry()
+    splash.move(screen_geo.center().x() - 350, screen_geo.center().y() - 200)
+    splash.show()
+    app.processEvents()  # paint splash before any heavy work starts
+
+    t_start = time.monotonic()
+
+    # Heavy init happens here; splash is already painted and visible above
     window = VectorMainWindow()
-    window.show()
+
+    # Ensure splash is on screen for at least 2 seconds total
+    elapsed_ms = int((time.monotonic() - t_start) * 1000)
+    remaining_ms = max(0, 2000 - elapsed_ms)
+
+    def _finish():
+        window.show()
+        splash.finish(window)
+
+    QTimer.singleShot(remaining_ms, _finish)
     return app.exec()
