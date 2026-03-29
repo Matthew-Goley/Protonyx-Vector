@@ -163,7 +163,14 @@ class DashboardGrid(QWidget):
             widget.refresh()
             if self._edit_mode:
                 widget.set_edit_mode(True)
-            self.add_widget(widget, entry['row'], entry['col'],
+            row = entry['row']
+            col = entry['col']
+            # Migrate layouts saved before the lens was expanded to _LENS_ROWSPAN rows:
+            # any widget that would overlap the lens area (col >= 1, row < _LENS_ROWSPAN)
+            # is shifted down to the first safe row.
+            if col >= 1 and row < _LENS_ROWSPAN:
+                row = _LENS_ROWSPAN
+            self.add_widget(widget, row, col,
                             entry['rowspan'], entry['colspan'])
 
     def remove_widget(self, widget: QWidget) -> None:
@@ -354,11 +361,13 @@ def _circle_btn_style(font_size: int, active: bool = False) -> str:
     """
 
 
+_LENS_ROWSPAN = 3   # rows the fixed lens occupies; widgets must start at or below this
+
 _DEFAULT_LAYOUT = [
-    {'type': 'PortfolioVectorWidget',     'row': 2, 'col': 5,  'rowspan': 3, 'colspan': 6},
-    {'type': 'PositionsListWidget',       'row': 2, 'col': 0,  'rowspan': 3, 'colspan': 5},
-    {'type': 'TotalEquityWidget',         'row': 5, 'col': 0,  'rowspan': 2, 'colspan': 4},
-    {'type': 'PortfolioVolatilityWidget', 'row': 5, 'col': 4,  'rowspan': 2, 'colspan': 4},
+    {'type': 'PortfolioVectorWidget',     'row': 3, 'col': 5,  'rowspan': 3, 'colspan': 6},
+    {'type': 'PositionsListWidget',       'row': 3, 'col': 0,  'rowspan': 3, 'colspan': 5},
+    {'type': 'TotalEquityWidget',         'row': 6, 'col': 0,  'rowspan': 2, 'colspan': 4},
+    {'type': 'PortfolioVolatilityWidget', 'row': 6, 'col': 4,  'rowspan': 2, 'colspan': 4},
 ]
 
 
@@ -395,7 +404,7 @@ class DashboardPage(QWidget):
 
         self._lens = LensDisplay(window=self.window, show_button=True)
         self._lens.open_lens_clicked.connect(self._navigate_to_lens)
-        self._dash_grid.add_widget(self._lens, row=0, col=1, rowspan=2, colspan=10, fixed=True)
+        self._dash_grid.add_widget(self._lens, row=0, col=1, rowspan=_LENS_ROWSPAN, colspan=10, fixed=True)
 
         self._scroll = QScrollArea()
         self._scroll.setWidget(self._dash_grid)

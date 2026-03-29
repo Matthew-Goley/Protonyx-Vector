@@ -2,7 +2,7 @@ from .paths import resource_path, user_data_dir
 
 APP_NAME = 'Vector'
 COMPANY_NAME = 'Protonyx'
-APP_VERSION = '0.3.5'
+APP_VERSION = '0.3.6'
 DATA_DIR = user_data_dir()
 POSITIONS_FILE = DATA_DIR / 'positions.json'
 SETTINGS_FILE = DATA_DIR / 'settings.json'
@@ -39,6 +39,8 @@ DEFAULT_APP_STATE = {
 
 DEFAULT_POSITIONS = []
 DEFAULT_PRICE_CACHE = {}
+LENS_SNAPSHOT_FILE = 'lens_snapshot.json'
+LENS_HISTORY_MAX = 90
 TTL_META_MINUTES         = 1_440   # 24 h — company info rarely changes
 TTL_HISTORY_DAILY_MINUTES = 60      # 60 min for 1mo and longer daily bars
 TTL_DIVIDENDS_MINUTES    = 1_440   # 24 h

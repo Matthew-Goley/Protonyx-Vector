@@ -152,7 +152,7 @@ class LensDisplay(QFrame):
         self._show_button = show_button
 
         self._tw_timer = QTimer(self)
-        self._tw_timer.setInterval(10)
+        self._tw_timer.setInterval(5)
         self._tw_timer.timeout.connect(self._tw_step)
         self._tw_plain = ''
         self._tw_html  = ''
@@ -232,7 +232,7 @@ class LensDisplay(QFrame):
                 Qt.TextFlag.TextWordWrap,
                 text,
             )
-            if br.height() <= int(h * 0.9):
+            if br.height() <= int(h * 0.80):
                 return pt
         return 10
 

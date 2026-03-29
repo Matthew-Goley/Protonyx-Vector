@@ -22,7 +22,7 @@ No build step, test suite, or linter is configured.
 ## Building (Nuitka)
 
 ```bash
-python -m nuitka --standalone --windows-console-mode=disable --enable-plugin=pyqt6 --output-filename="Vector-v0.3.5.exe" --include-data-dir=assets=assets main.py
+python -m nuitka --standalone --windows-console-mode=disable --enable-plugin=pyqt6 --output-filename=aa"Vector-v0.3.5.exe" --include-data-dir=assets=assets main.py
 ```
 
 - `--include-data-dir=assets=assets` copies the entire `assets/` folder next to the exe

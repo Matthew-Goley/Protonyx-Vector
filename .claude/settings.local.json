@@ -32,7 +32,11 @@
       "Bash(.venv/Scripts/pip install:*)",
       "Bash(.venv/Scripts/python -c \"import matplotlib, numpy; print\\(''matplotlib'', matplotlib.__version__, ''numpy'', numpy.__version__\\)\")",
       "Bash(.venv/Scripts/python.exe -c \"from vector.lens_templates import _TEMPLATES, _COLORS; print\\(''OK'', len\\(_TEMPLATES\\), ''states,'', len\\(_COLORS\\), ''colors''\\)\")",
-      "Bash(.venv/Scripts/python.exe -c \"from vector.lens_engine import generate_lens; print\\(''lens_engine OK''\\)\")"
+      "Bash(.venv/Scripts/python.exe -c \"from vector.lens_engine import generate_lens; print\\(''lens_engine OK''\\)\")",
+      "Bash(python -c \"from vector.lens_templates import _TEMPLATES, _COLORS; print\\(''Templates OK:'', len\\(_TEMPLATES\\), ''actions,'', sum\\(len\\(v\\) for v in _TEMPLATES.values\\(\\)\\), ''pairs''\\); print\\(''Colors OK:'', list\\(_COLORS.keys\\(\\)\\)\\)\")",
+      "Bash(python -c \"from vector.lens_engine import generate_lens, load_lens_history; print\\(''Engine imports OK''\\); print\\(''load_lens_history:'', load_lens_history\\(\\)\\)\")",
+      "Bash(python -c \"from vector.constants import LENS_SNAPSHOT_FILE, LENS_HISTORY_MAX; print\\(''LENS_SNAPSHOT_FILE:'', LENS_SNAPSHOT_FILE\\); print\\(''LENS_HISTORY_MAX:'', LENS_HISTORY_MAX\\)\")",
+      "Bash(python -c \"from vector.pages.dashboard import DashboardPage; from vector.widget_types.lens import LensDisplay; print\\(''imports OK''\\)\")"
     ]
   }
 }
