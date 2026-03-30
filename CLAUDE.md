@@ -119,7 +119,7 @@ All page-level QWidget classes live here. `vector/app.py` imports from this subp
 
 ### Lens Engine (`lens_engine.py` + `lens_templates.py`)
 
-`generate_lens(positions, store, settings)` returns a **6-tuple**: `(text, color, recommended_tickers, deposit_amount, underweight_sector, action_type)`.
+`generate_lens(positions, store, settings)` returns a **7-tuple**: `(text, color, recommended_tickers, deposit_amount, underweight_sector, action_type, caution_score)`.
 
 - `text` — two plain-English sentences covering risk and next-deposit guidance (observational, not directive)
 - `color` — hex color reflecting portfolio state (from `_COLORS` in `lens_templates.py`)
@@ -161,6 +161,7 @@ Template sentence banks (`_TEMPLATES`) and state color map (`_COLORS`) live in `
 - Projections display percentage change relative to current equity, not raw dollar values.
 - matplotlib `FigureCanvasQTAgg` captures wheel events — fixed with `self._canvas.wheelEvent = lambda event: event.ignore()` so scrolling works when the mouse is over a chart.
 - Monte Carlo parameters (projection period, simulation count) are configurable via Settings → Monte Carlo and stored under `monte_carlo` in `settings.json`. Mapping constants: `MONTE_CARLO_HORIZON_DAYS`, `MONTE_CARLO_SIMULATIONS` in `constants.py`.
+- Between the projection graphs and the pie charts, two insight cards are rendered side-by-side: `_CautionCard` (left, 1:2 ratio) shows a semi-circular arc gauge with the portfolio caution score (1–99); `_MCContextCard` (right) shows a plain-English template sentence explaining what the narrower projection fan means. Both are populated in `VectorLensPage._update_insights()`.
 
 ### Settings Page (`pages/settings.py`)
 

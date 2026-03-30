@@ -865,6 +865,37 @@ def generate_lens(
         return_deposit = uw_deposit
         return_underweight = underweight
 
+    # ── Caution score (1–99) ─────────────────────────────────────────────
+    _ACTION_BASE_CAUTION: dict[str, int] = {
+        'single_position':           82,
+        'steep_downtrend':           80,
+        'excessive_stock_vol':       75,
+        'high_portfolio_beta':       68,
+        'high_volatility_downtrend': 65,
+        'winner_drift':              62,
+        'high_sector_concentration': 60,
+        'depreciating_trend':        55,
+        'high_single_stock':         55,
+        'negative_sharpe':           50,
+        'weak_downtrend':            48,
+        'unrealized_loss':           42,
+        'low_diversification':       38,
+        'dead_weight':               30,
+        'underrepresented_sector':   25,
+        'index_fund_awareness':      20,
+        'high_volatility_uptrend':   22,
+        'low_yield_opportunity':     15,
+        'strong_momentum':           12,
+        'neutral_diversified':       10,
+        'well_positioned':            8,
+    }
+    _caution_base: int = _ACTION_BASE_CAUTION.get(action, 20)
+    _caution_adj: float = vol_score * 0.10
+    _caution_adj += max(0.0, (max_single_stock_pct - 35.0) * 0.25)
+    _caution_adj += max(0.0, ((beta_val or 1.0) - 1.2) * 8.0)
+    _caution_adj += max(0.0, (3 - sector_count) * 4.0)
+    caution_score: int = max(1, min(99, int(_caution_base + _caution_adj)))
+
     # ── Snapshot ──────────────────────────────────────────────────────────
     _save_snapshot({
         'timestamp':               datetime.now(timezone.utc).isoformat(),
@@ -899,4 +930,5 @@ def generate_lens(
         return_deposit,
         return_underweight,
         action_type,
+        caution_score,
     )

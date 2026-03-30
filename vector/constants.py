@@ -35,7 +35,7 @@ DEFAULT_SETTINGS = {
         'sector_concentration_pct': 50,
         'steep_downtrend_pct': -20,
         'high_beta_threshold': 1.3,
-        'stock_vol_threshold_pct': 45,
+        'stock_vol_threshold_pct': 35,
     },
     'monte_carlo': {
         'projection_period': '1 year',

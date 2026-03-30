@@ -161,6 +161,7 @@ class LensDisplay(QFrame):
         self._deposit_amount: float = 0.0
         self._underweight_sector: str = ''
         self._action_type: str = 'hold'
+        self._caution_score: int = 0
 
         self.setStyleSheet('background: transparent; border: none;')
 
@@ -332,8 +333,11 @@ class LensDisplay(QFrame):
 
         try:
             result = generate_lens(positions, store, settings)
-            if len(result) == 6:
+            if len(result) == 7:
+                text, _color, self._recommended_tickers, self._deposit_amount, self._underweight_sector, self._action_type, self._caution_score = result
+            elif len(result) == 6:
                 text, _color, self._recommended_tickers, self._deposit_amount, self._underweight_sector, self._action_type = result
+                self._caution_score = 0
             elif len(result) == 5:
                 text, _color, self._recommended_tickers, self._deposit_amount, self._underweight_sector = result
                 self._action_type = 'hold'

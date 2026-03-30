@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtCore import Qt, QRectF
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -18,6 +19,216 @@ from .dashboard import _CONTENT_W
 
 if TYPE_CHECKING:
     from vector.app import VectorMainWindow
+
+
+# ── Monte Carlo context templates ─────────────────────────────────────────
+_MC_CONTEXT_TEMPLATES = [
+    (
+        "The tighter fan in the projection above comes from adding {deposit_str} across "
+        "{tickers_str}. {sector} has historically carried lower annualised volatility "
+        "than the current portfolio mix — that reduced vol is what compresses the range "
+        "of simulated outcomes."
+    ),
+    (
+        "{deposit_str} into {sector} names like {tickers_str} introduces a return stream "
+        "that has historically followed different cycle drivers. Lower correlation between "
+        "holdings narrows the Monte Carlo fan and tightens the projected outcome range."
+    ),
+    (
+        "The 'With Lens' projection uses {deposit_str} added to {tickers_str}. {sector} "
+        "has historically moved on different drivers than the current mix — that sector "
+        "diversification reduces the spread between the optimistic and pessimistic "
+        "simulation bands above."
+    ),
+    (
+        "Adding {deposit_str} to {sector} ({tickers_str}) reduces the portfolio's reliance "
+        "on any single sector's return cycle. Historically, that kind of diversification "
+        "tightens the Monte Carlo fan — fewer scenarios where the entire portfolio tracks "
+        "the same headwind."
+    ),
+    (
+        "When {deposit_str} is deployed into {sector} names like {tickers_str}, the "
+        "simulation spread narrows. Sectors with historically uncorrelated return streams "
+        "reduce the variance in portfolio outcomes — which is what the tighter fan "
+        "above reflects."
+    ),
+]
+
+_MC_CONTEXT_PLACEHOLDER = (
+    "The projection fan above reflects this portfolio's historical volatility profile. "
+    "A more diversified allocation across uncorrelated sectors would typically narrow "
+    "this range — let the Lens identify the opportunity."
+)
+
+_CAUTION_TIERS = [
+    (25,  '#4ade80', 'Well balanced'),
+    (50,  '#facc15', 'Manageable'),
+    (75,  '#fb923c', 'Elevated risk'),
+    (99,  '#ef4444', 'High caution'),
+]
+
+
+def _caution_color(score: int) -> str:
+    for threshold, color, _ in _CAUTION_TIERS:
+        if score <= threshold:
+            return color
+    return '#ef4444'
+
+
+def _caution_label(score: int) -> str:
+    for threshold, _, label in _CAUTION_TIERS:
+        if score <= threshold:
+            return label
+    return 'High caution'
+
+
+class _GaugeWidget(QWidget):
+    """Semi-circular arc gauge displaying a score from 1–99."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._score = 0
+        self.setMinimumSize(140, 110)
+
+    def set_score(self, score: int) -> None:
+        self._score = max(1, min(99, score))
+        self.update()
+
+    def paintEvent(self, _event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w = float(self.width())
+        h = float(self.height())
+        cx = w / 2.0
+        bottom_y = h - 12.0
+        r = min(cx - 18.0, bottom_y - 8.0)
+        if r < 20:
+            painter.end()
+            return
+
+        rect = QRectF(cx - r, bottom_y - r, r * 2.0, r * 2.0)
+        pen_w = max(8, int(r * 0.13))
+
+        # Background arc — full semi-circle (left → top → right), clockwise
+        bg_pen = QPen(QColor('#2a3142'), pen_w, Qt.PenStyle.SolidLine,
+                      Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(bg_pen)
+        painter.drawArc(rect, 180 * 16, -180 * 16)
+
+        # Fill arc — proportional to score
+        if self._score > 0:
+            span = int(-180 * (self._score / 100.0) * 16)
+            fg_pen = QPen(QColor(_caution_color(self._score)), pen_w,
+                          Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                          Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(fg_pen)
+            painter.drawArc(rect, 180 * 16, span)
+
+        # Score number inside arc
+        f = QFont()
+        f.setPointSize(max(16, int(r * 0.36)))
+        f.setBold(True)
+        painter.setFont(f)
+        painter.setPen(QColor(_caution_color(self._score) if self._score > 0 else '#8d98af'))
+        text_rect = QRectF(cx - r * 0.85, bottom_y - r * 0.85, r * 1.7, r * 0.75)
+        label = str(self._score) if self._score > 0 else '—'
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, label)
+
+        painter.end()
+
+
+class _CautionCard(QFrame):
+    """Left insight card — portfolio caution score gauge."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName('cardFrame')
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(32)
+        shadow.setOffset(0, 10)
+        shadow.setColor(QColor(0, 0, 0, 80))
+        self.setGraphicsEffect(shadow)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(6)
+
+        title = QLabel('Caution Score')
+        f = QFont()
+        f.setPointSize(12)
+        f.setBold(True)
+        title.setFont(f)
+        title.setStyleSheet('font-size: 12pt; font-weight: 700;')
+        layout.addWidget(title)
+
+        self._gauge = _GaugeWidget()
+        layout.addWidget(self._gauge, stretch=1)
+
+        self._tier_lbl = QLabel('—')
+        self._tier_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._tier_lbl.setStyleSheet('font-size: 13pt; font-weight: 700;')
+        layout.addWidget(self._tier_lbl)
+
+        self._sub_lbl = QLabel('Based on current portfolio state')
+        self._sub_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._sub_lbl.setStyleSheet('font-size: 9pt; color: #8d98af;')
+        layout.addWidget(self._sub_lbl)
+
+    def set_score(self, score: int) -> None:
+        self._gauge.set_score(score)
+        label = _caution_label(score) if score > 0 else '—'
+        color = _caution_color(score) if score > 0 else '#8d98af'
+        self._tier_lbl.setText(label)
+        self._tier_lbl.setStyleSheet(f'font-size: 13pt; font-weight: 700; color: {color};')
+
+
+class _MCContextCard(QFrame):
+    """Right insight card — plain-English explanation of what the Monte Carlo fan means."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName('cardFrame')
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(32)
+        shadow.setOffset(0, 10)
+        shadow.setColor(QColor(0, 0, 0, 80))
+        self.setGraphicsEffect(shadow)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(10)
+
+        title = QLabel('What the fan means')
+        f = QFont()
+        f.setPointSize(12)
+        f.setBold(True)
+        title.setFont(f)
+        title.setStyleSheet('font-size: 12pt; font-weight: 700;')
+        layout.addWidget(title)
+
+        self._body = QLabel(_MC_CONTEXT_PLACEHOLDER)
+        self._body.setWordWrap(True)
+        self._body.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self._body.setStyleSheet('font-size: 11pt; color: #c7cedb; line-height: 1.5;')
+        layout.addWidget(self._body, stretch=1)
+
+    def set_context(self, deposit_str: str, tickers: list[str], sector: str) -> None:
+        if not tickers or not sector:
+            self._body.setText(_MC_CONTEXT_PLACEHOLDER)
+            return
+        tickers_str = ', '.join(tickers)
+        # Deterministic template selection
+        key = hashlib.md5(''.join(sorted(tickers)).encode()).digest()[0]
+        tmpl = _MC_CONTEXT_TEMPLATES[key % len(_MC_CONTEXT_TEMPLATES)]
+        self._body.setText(tmpl.format(
+            deposit_str=deposit_str,
+            tickers_str=tickers_str,
+            sector=sector,
+        ))
+
+    def clear(self) -> None:
+        self._body.setText(_MC_CONTEXT_PLACEHOLDER)
 
 
 class _GraphCard(QFrame):
@@ -296,6 +507,19 @@ class VectorLensPage(QWidget):
         graphs_layout.addWidget(self._graph_b)
         layout.addWidget(graphs_row)
 
+        # ── Insight row (caution score + MC context) ──────────────────────
+        insights_row = QWidget()
+        insights_layout = QHBoxLayout(insights_row)
+        insights_layout.setContentsMargins(0, 0, 0, 0)
+        insights_layout.setSpacing(16)
+        self._caution_card = _CautionCard()
+        self._caution_card.setMinimumHeight(210)
+        self._mc_context_card = _MCContextCard()
+        self._mc_context_card.setMinimumHeight(210)
+        insights_layout.addWidget(self._caution_card, stretch=1)
+        insights_layout.addWidget(self._mc_context_card, stretch=2)
+        layout.addWidget(insights_row)
+
         pies_row = QWidget()
         pies_layout = QHBoxLayout(pies_row)
         pies_layout.setContentsMargins(0, 0, 0, 0)
@@ -314,7 +538,17 @@ class VectorLensPage(QWidget):
         self._lens.refresh()
         recommended_tickers = list(getattr(self._lens, '_recommended_tickers', []))
         self._update_graphs(recommended_tickers)
+        self._update_insights(recommended_tickers)
         self._update_pies(recommended_tickers)
+
+    def _update_insights(self, recommended_tickers: list[str]) -> None:
+        caution = getattr(self._lens, '_caution_score', 0)
+        self._caution_card.set_score(caution)
+
+        deposit = getattr(self._lens, '_deposit_amount', 0.0)
+        sector = getattr(self._lens, '_underweight_sector', '')
+        dep_str = f'${deposit:,.0f}' if deposit > 0 else ''
+        self._mc_context_card.set_context(dep_str, recommended_tickers, sector)
 
     def _update_graphs(self, recommended_tickers: list[str]) -> None:
         from vector.monte_carlo import build_historical_curve, run_projection
