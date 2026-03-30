@@ -192,9 +192,9 @@ class OnboardingPage(QWidget):
         inner_layout.addWidget(title)
         inner_layout.addWidget(subtitle, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        add_button = LoadingButton('Add Position')
+        add_button = LoadingButton('Add Position  (a)')
         add_button.setProperty('accent', True)
-        add_button.setFixedWidth(180)
+        add_button.setFixedWidth(210)
         add_button.clicked.connect(self.open_add_modal)
         inner_layout.addWidget(add_button, alignment=Qt.AlignmentFlag.AlignHCenter)
 
@@ -219,6 +219,12 @@ class OnboardingPage(QWidget):
 
         scroll.setWidget(inner)
         layout.addWidget(scroll)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == Qt.Key.Key_A:
+            self.open_add_modal()
+        else:
+            super().keyPressEvent(event)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         if self.overlay:

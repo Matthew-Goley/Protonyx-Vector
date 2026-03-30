@@ -160,6 +160,7 @@ class LensDisplay(QFrame):
         self._recommended_tickers: list[str] = []
         self._deposit_amount: float = 0.0
         self._underweight_sector: str = ''
+        self._action_type: str = 'hold'
 
         self.setStyleSheet('background: transparent; border: none;')
 
@@ -331,24 +332,31 @@ class LensDisplay(QFrame):
 
         try:
             result = generate_lens(positions, store, settings)
-            if len(result) == 5:
+            if len(result) == 6:
+                text, _color, self._recommended_tickers, self._deposit_amount, self._underweight_sector, self._action_type = result
+            elif len(result) == 5:
                 text, _color, self._recommended_tickers, self._deposit_amount, self._underweight_sector = result
+                self._action_type = 'hold'
             elif len(result) == 4:
                 text, _color, self._recommended_tickers, self._deposit_amount = result
                 self._underweight_sector = ''
+                self._action_type = 'hold'
             elif len(result) == 3:
                 text, _color, self._recommended_tickers = result
                 self._deposit_amount = 0.0
                 self._underweight_sector = ''
+                self._action_type = 'hold'
             else:
                 text, _color = result
                 self._recommended_tickers = []
                 self._deposit_amount = 0.0
                 self._underweight_sector = ''
+                self._action_type = 'hold'
         except Exception:  # noqa: BLE001
             text = "Unable to generate a lens insight right now. Check your positions and try refreshing."
             self._recommended_tickers = []
             self._deposit_amount = 0.0
             self._underweight_sector = ''
+            self._action_type = 'hold'
 
         self._start_typewrite(text)

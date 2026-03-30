@@ -5,6 +5,7 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 
 _COLORS: dict[str, str] = {
+    # ── existing ──────────────────────────────────────────────────────────
     'single_position':            '#8B3FCF',
     'high_single_stock':          '#E91E8C',
     'high_sector_concentration':  '#FF6B2B',
@@ -19,6 +20,15 @@ _COLORS: dict[str, str] = {
     'low_yield_opportunity':      '#54BFFF',
     'neutral_diversified':        '#c7cedb',
     'well_positioned':            '#34a7ff',
+    # ── new (v0.3.6) ──────────────────────────────────────────────────────
+    'steep_downtrend':            '#ff5d5d',
+    'excessive_stock_vol':        '#ff5d5d',
+    'winner_drift':               '#E91E8C',
+    'index_fund_awareness':       '#54BFFF',
+    'high_portfolio_beta':        '#FF6B2B',
+    'dead_weight':                '#8d98af',
+    'underrepresented_sector':    '#54BFFF',
+    'unrealized_loss':            '#FF6B2B',
 }
 
 # ---------------------------------------------------------------------------
@@ -582,6 +592,331 @@ _TEMPLATES: dict[str, list[tuple[str, str]]] = {
             " {deposit_amount_str} in {underweight_sector} — for example,"
             " {underweight_ticker1} — is the mathematical amount needed"
             " to bring that sector to equal weight with the current portfolio.",
+        ),
+    ],
+
+    # ── steep_downtrend ───────────────────────────────────────────────────
+    "steep_downtrend": [
+        (
+            "{declining_ticker} has been declining at {declining_slope_annual:+.0f}% annualised"
+            " — a steep downward slope sustained across the 6-month measurement window.",
+            "{declining_ticker} is {declining_ticker_pct:.0f}% of this portfolio,"
+            " meaning its trajectory is directly pulling the weighted direction lower."
+            " {underweight_sector} has historically followed different cycles from the current holdings"
+            " — {deposit_amount_str} in {underweight_ticker1} ({underweight_sector}) would"
+            " introduce a return stream with different sector drivers.",
+        ),
+        (
+            "The 6-month regression slope for {declining_ticker} is {declining_slope_annual:+.0f}%"
+            " annualised — one of the steeper sustained declines recorded in this portfolio.",
+            "At {declining_ticker_pct:.0f}% of total equity, {declining_ticker}'s persistent"
+            " downward trend is pulling the portfolio's weighted direction lower."
+            " {underweight_sector_note}"
+            " {deposit_amount_str} in {underweight_sector} — names like {underweight_ticker1}"
+            " — would introduce a sector with historically different cycle characteristics.",
+        ),
+        (
+            "{declining_ticker} is tracking {declining_slope_annual:+.0f}% annualised"
+            " on the 6-month linear trend — a steep-decline classification"
+            " under the Vector framework.",
+            "That trajectory combined with {declining_ticker_pct:.0f}% portfolio weight"
+            " means a significant share of total equity is tracking this declining trend."
+            " {underweight_sector} has historically shown different return characteristics from {top_sector}"
+            " — {deposit_amount_str} in {underweight_ticker1} ({underweight_sector}) would"
+            " add a return stream that has not historically tracked {declining_ticker}'s slope closely.",
+        ),
+        (
+            "A 6-month annualised slope of {declining_slope_annual:+.0f}%"
+            " places {declining_ticker} in the steep-decline category for this portfolio.",
+            "{declining_ticker} is {declining_ticker_pct:.0f}% of the portfolio — its performance"
+            " carries proportional weight on the overall direction score."
+            " {underweight_sector} has historically moved on different economic drivers than the current mix"
+            " — {deposit_amount_str} in {underweight_sector} ({underweight_ticker1}"
+            " or {underweight_ticker2}) would broaden exposure beyond the sectors pulling direction lower.",
+        ),
+    ],
+
+    # ── excessive_stock_vol ───────────────────────────────────────────────
+    "excessive_stock_vol": [
+        (
+            "{volatile_ticker} is moving at {volatile_ticker_vol:.0f}% annualised volatility"
+            " — well above typical single-stock ranges — while representing"
+            " {volatile_ticker_pct:.0f}% of this portfolio.",
+            "{underweight_sector} has historically carried lower annualised volatility than high-growth names"
+            " — holdings like {underweight_ticker1} tend to move on different drivers."
+            " {deposit_amount_str} in {underweight_sector} would reduce the portfolio's"
+            " concentration in high-vol names like {volatile_ticker}.",
+        ),
+        (
+            "Annualised price volatility for {volatile_ticker} is {volatile_ticker_vol:.0f}%"
+            " — a wide daily range — and it makes up {volatile_ticker_pct:.0f}% of total equity.",
+            "High single-stock volatility at significant weight creates a concentration-plus-volatility"
+            " compound — both factors amplify each other's effect on drawdown depth."
+            " {underweight_sector_note}"
+            " {deposit_amount_str} in {underweight_sector} — names like {underweight_ticker1}"
+            " — would add a sector with historically different volatility characteristics.",
+        ),
+        (
+            "{volatile_ticker_pct:.0f}% of this portfolio sits in {volatile_ticker},"
+            " which has moved at {volatile_ticker_vol:.0f}% annualised volatility"
+            " over the measured period.",
+            "When a volatile holding commands a large portfolio share,"
+            " portfolio-level drawdowns can exceed what the overall volatility score alone suggests."
+            " {underweight_sector} has historically shown more stable return characteristics"
+            " — {deposit_amount_str} in {underweight_ticker1} ({underweight_sector})"
+            " would dilute the per-position volatility concentration.",
+        ),
+        (
+            "{volatile_ticker} carries {volatile_ticker_vol:.0f}% annualised volatility"
+            " and {volatile_ticker_pct:.0f}% portfolio weight —"
+            " both figures are elevated for a single holding.",
+            "{underweight_sector} has historically followed different cycles than high-vol growth names"
+            " — {underweight_ticker1} and {underweight_ticker2} move on different sector drivers."
+            " {deposit_amount_str} in {underweight_sector} would introduce a less correlated return stream"
+            " alongside {volatile_ticker}.",
+        ),
+    ],
+
+    # ── winner_drift ──────────────────────────────────────────────────────
+    "winner_drift": [
+        (
+            "{drift_ticker} has grown to {drift_ticker_pct:.0f}% of this portfolio"
+            " — a weight that likely reflects price appreciation"
+            " rather than a deliberate sizing decision.",
+            "Positions that grow to dominance through appreciation introduce concentration"
+            " that was not present at the original allocation."
+            " {underweight_sector} has historically followed different cycles than {drift_ticker}'s sector"
+            " — {deposit_amount_str} in {underweight_ticker1} ({underweight_sector})"
+            " would begin distributing the portfolio's weight beyond {drift_ticker}'s appreciation-driven dominance.",
+        ),
+        (
+            "At {drift_ticker_pct:.0f}% of the portfolio, {drift_ticker}'s weight"
+            " appears to have expanded through strong price performance"
+            " rather than proportional additional purchases.",
+            "Appreciation-driven concentration means the portfolio's risk profile has shifted"
+            " — the original sizing intent no longer reflects the current weight distribution."
+            " {underweight_sector_note}"
+            " {deposit_amount_str} in {underweight_sector} — names like {underweight_ticker1}"
+            " — would add a return stream that has historically not tracked {drift_ticker}'s momentum closely.",
+        ),
+        (
+            "{drift_ticker} currently commands {drift_ticker_pct:.0f}% of portfolio equity"
+            " — a position size that has likely grown through sustained positive price momentum.",
+            "When a holding's weight expands through returns rather than deposits,"
+            " the concentration is a passive outcome of the market, not a deliberate decision."
+            " {underweight_sector} has historically moved on different economic drivers from {top_sector}"
+            " — {deposit_amount_str} in {underweight_ticker1} ({underweight_sector})"
+            " would reduce {drift_ticker}'s passive dominance toward a more intentional allocation.",
+        ),
+        (
+            "Strong performance has pushed {drift_ticker} to {drift_ticker_pct:.0f}%"
+            " of this portfolio — a meaningful overweight relative to its likely original allocation.",
+            "{underweight_sector} has historically carried different return characteristics from the current mix"
+            " — {underweight_ticker1} and {underweight_ticker2} operate on different sector cycles."
+            " {deposit_amount_str} in {underweight_sector} would reduce the passive concentration"
+            " that has built up through {drift_ticker}'s appreciation.",
+        ),
+    ],
+
+    # ── index_fund_awareness ──────────────────────────────────────────────
+    "index_fund_awareness": [
+        (
+            "{index_ticker} makes up {index_pct:.0f}% of this portfolio —"
+            " that's exposure to a broad basket of companies in a single ticker.",
+            "Broad index ETFs deliver market-average returns by construction —"
+            " no meaningful underperformance against the index, but no outperformance either."
+            " {underweight_sector} is not captured within {index_ticker}'s composition at significant weight"
+            " — {deposit_amount_str} in {underweight_ticker1} ({underweight_sector}) would"
+            " add a return stream outside the broad index's exposure.",
+        ),
+        (
+            "With {index_ticker} at {index_pct:.0f}% of holdings,"
+            " this portfolio has broad market diversification built into its largest position.",
+            "The trade-off of heavy index exposure is return anchoring —"
+            " performance closely tracks the benchmark, with limited divergence in either direction."
+            " {underweight_sector_note}"
+            " {deposit_amount_str} in {underweight_sector} — names like {underweight_ticker1}"
+            " — would add targeted sector exposure alongside {index_ticker}'s broad coverage.",
+        ),
+        (
+            "{index_ticker} at {index_pct:.0f}% means a large share of this portfolio"
+            " tracks a broad basket of equities automatically.",
+            "Index-heavy portfolios eliminate single-stock concentration risk within that position"
+            " — diversification is embedded in the ETF itself, not through individual stock selection."
+            " {underweight_sector} has historically followed different cycles from a broad market index"
+            " — {deposit_amount_str} in {underweight_ticker1} ({underweight_sector}) would"
+            " add the return characteristics that the index does not fully capture.",
+        ),
+        (
+            "{index_pct:.0f}% of this portfolio is held in {index_ticker},"
+            " a broad market fund that provides instant exposure across its constituent holdings.",
+            "Portfolios anchored by broad index ETFs tend to exhibit beta close to 1.0"
+            " relative to their benchmark."
+            " {underweight_sector} has historically carried distinct return drivers from the broad market"
+            " — {deposit_amount_str} in {underweight_sector} ({underweight_ticker1}"
+            " or {underweight_ticker2}) would introduce a component not fully correlated with {index_ticker}'s composition.",
+        ),
+    ],
+
+    # ── high_portfolio_beta ───────────────────────────────────────────────
+    "high_portfolio_beta": [
+        (
+            "This portfolio's estimated beta is {beta:.2f} — it has historically"
+            " amplified broad market moves by roughly {beta:.1f}× in both directions.",
+            "{low_beta_sector} names like {low_beta_ticker1} have historically carried lower market beta"
+            " — they tend to move at a smaller amplitude relative to broad market swings."
+            " {deposit_amount_str} in {low_beta_ticker1} ({low_beta_sector}) would"
+            " reduce the portfolio's weighted sensitivity to market-wide moves.",
+        ),
+        (
+            "A beta of {beta:.2f} means the portfolio has historically moved"
+            " approximately {beta:.2f}× for every 1× move in the broad market.",
+            "{low_beta_ticker1} and {low_beta_ticker2} have historically carried lower market sensitivity"
+            " than the current holdings — they move at lower amplitude relative to systematic risk."
+            " {deposit_amount_str} in {low_beta_ticker1} ({low_beta_sector}) would"
+            " distribute the portfolio's beta exposure more broadly.",
+        ),
+        (
+            "Portfolio beta of {beta:.2f} places this portfolio in a"
+            " high market-sensitivity category — gains and losses are amplified"
+            " relative to a broad index.",
+            "{low_beta_sector} is a sector already in this portfolio."
+            " {low_beta_ticker1} and {low_beta_ticker2} have historically amplified broad market moves"
+            " less than the current portfolio mix."
+            " {deposit_amount_str} in {low_beta_ticker1} ({low_beta_sector}) would"
+            " begin pulling the portfolio's weighted beta toward a more moderate level.",
+        ),
+        (
+            "A beta of {beta:.2f} reflects a portfolio that amplifies systematic risk"
+            " — a 5% market decline has historically corresponded to approximately"
+            " a {beta_impact:.0f}% move in this portfolio.",
+            "{low_beta_ticker1} and {low_beta_ticker2} in {low_beta_sector} have historically"
+            " moved at lower amplitude during market drawdowns than the current holdings."
+            " {deposit_amount_str} in {low_beta_ticker1} ({low_beta_sector}) would"
+            " reduce that amplification factor toward a more balanced level.",
+        ),
+    ],
+
+    # ── dead_weight ───────────────────────────────────────────────────────
+    "dead_weight": [
+        (
+            "{deadweight_ticker} represents {deadweight_pct:.1f}% of this portfolio"
+            " with a 6-month trend slope of {deadweight_slope_annual:+.0f}% annualised.",
+            "{underweight_sector} is not currently represented and has historically followed"
+            " different cycles from the current holdings."
+            " {deposit_amount_str} in {underweight_ticker1} ({underweight_sector}) would"
+            " add sector exposure with historically different return characteristics"
+            " — more directional influence than the current flat allocation in {deadweight_ticker}.",
+        ),
+        (
+            "At {deadweight_pct:.1f}% of the portfolio, {deadweight_ticker}"
+            " is a minor position — and its {deadweight_slope_annual:+.0f}%"
+            " annualised trend offers little momentum to offset that.",
+            "Holdings below 2% of portfolio value rarely move the performance needle."
+            " {underweight_sector_note}"
+            " {deposit_amount_str} in {underweight_sector} — names like {underweight_ticker1}"
+            " — would have substantially more directional influence at the portfolio level.",
+        ),
+        (
+            "{deadweight_ticker} is at {deadweight_pct:.1f}% of the portfolio"
+            " with a {deadweight_slope_annual:+.0f}% annualised slope —"
+            " a small, flat position.",
+            "Positions this small with flat momentum are functionally inert from a performance standpoint."
+            " {underweight_sector} has historically shown more active return characteristics than the current mix"
+            " — {deposit_amount_str} in {underweight_ticker1} ({underweight_sector}) would"
+            " make a measurable difference to the portfolio's overall direction score.",
+        ),
+        (
+            "The {deadweight_ticker} position is {deadweight_pct:.1f}% of the portfolio"
+            " with a {deadweight_slope_annual:+.0f}% annualised trend.",
+            "A position of this size and trajectory has historically contributed"
+            " less than 0.1% to portfolio return in either direction."
+            " {underweight_sector} has historically followed different cycles from the current holdings"
+            " — {deposit_amount_str} in {underweight_sector} ({underweight_ticker1}"
+            " or {underweight_ticker2}) would deliver materially more return impact.",
+        ),
+    ],
+
+    # ── underrepresented_sector ───────────────────────────────────────────
+    "underrepresented_sector": [
+        (
+            "{thin_sector} is represented by just {thin_sector_ticker}"
+            " at {thin_sector_pct:.0f}% of the portfolio —"
+            " a single-name allocation in that sector.",
+            "Sectors with only one holding carry idiosyncratic risk — the allocation tracks"
+            " one company's results, not the sector's broader characteristics."
+            " {sector_suggestion1} and {sector_suggestion2} are additional {thin_sector} names"
+            " — historically, adding a second holding in a sector reduces single-stock risk"
+            " within that allocation."
+            " {deposit_amount_str} in {thin_sector} would broaden representation beyond {thin_sector_ticker} alone.",
+        ),
+        (
+            "This portfolio has a one-stock presence in {thin_sector}"
+            " at {thin_sector_pct:.0f}% via {thin_sector_ticker}.",
+            "A single-ticker sector allocation tracks that company's performance, not the sector's."
+            " {sector_suggestion1} and {sector_suggestion2} operate on similar sector drivers as {thin_sector_ticker}"
+            " but carry different company-specific characteristics."
+            " {deposit_amount_str} in {sector_suggestion1} or {sector_suggestion2}"
+            " would give {thin_sector} proper sector-level representation.",
+        ),
+        (
+            "{thin_sector_ticker} is the only {thin_sector} holding"
+            " at {thin_sector_pct:.0f}% of the portfolio —"
+            " a toe-hold rather than a full sector allocation.",
+            "When a sector is held through one stock, its contribution to diversification is limited"
+            " — the individual company's drivers dominate over the sector's broader cycle."
+            " {sector_suggestion1} and {sector_suggestion2} have historically operated"
+            " alongside {thin_sector_ticker} in the same sector but with different company-specific risk"
+            " — {deposit_amount_str} in {thin_sector} would broaden the sector's representation.",
+        ),
+        (
+            "The {thin_sector} allocation consists of a single position:"
+            " {thin_sector_ticker} at {thin_sector_pct:.0f}% of portfolio value.",
+            "A second {thin_sector} name alongside {thin_sector_ticker} has historically"
+            " distributed the sector's idiosyncratic risk more broadly."
+            " {sector_suggestion1} operates on the same sector cycle as {thin_sector_ticker}"
+            " but with independent company-specific characteristics"
+            " — {deposit_amount_str} in {sector_suggestion1} would shift {thin_sector}"
+            " from a single-stock bet to a sector-level allocation.",
+        ),
+    ],
+
+    # ── unrealized_loss ───────────────────────────────────────────────────
+    "unrealized_loss": [
+        (
+            "{loss_ticker} is down approximately {loss_pct:.0f}%"
+            " from its 6-month-ago price —"
+            " a meaningful drawdown across the measurement window.",
+            "{underweight_sector} has historically shown different direction characteristics"
+            " from the current holdings."
+            " {deposit_amount_str} in {underweight_ticker1} ({underweight_sector}) would"
+            " add a return stream that has not historically tracked the drawdown pattern"
+            " seen in {loss_ticker}.",
+        ),
+        (
+            "Over the past 6 months, {loss_ticker} has declined approximately"
+            " {loss_pct:.0f}% from its starting price.",
+            "At this drawdown level, {loss_ticker} is a drag on the overall weighted slope."
+            " {underweight_sector_note}"
+            " {deposit_amount_str} in {underweight_sector} — names like {underweight_ticker1}"
+            " — would add a sector with historically different momentum characteristics.",
+        ),
+        (
+            "{loss_ticker} is approximately {loss_pct:.0f}% lower"
+            " than it was 6 months ago —"
+            " a sustained drawdown across the full measurement period.",
+            "{underweight_sector} has historically followed different cycles from the sectors"
+            " currently showing drawdowns."
+            " {deposit_amount_str} in {underweight_ticker1} ({underweight_sector}) would"
+            " introduce exposure with historically different correlation to {loss_ticker}'s declining trend.",
+        ),
+        (
+            "The 6-month price history for {loss_ticker} shows a decline"
+            " of approximately {loss_pct:.0f}% from the period's opening price.",
+            "{underweight_sector} has historically carried different return characteristics from the current mix"
+            " — it has not tended to mirror the drawdown patterns seen in this sector."
+            " {deposit_amount_str} in {underweight_sector} ({underweight_ticker1}"
+            " or {underweight_ticker2}) would add a counterbalancing return stream.",
         ),
     ],
 

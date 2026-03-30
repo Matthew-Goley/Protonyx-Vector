@@ -329,12 +329,18 @@ class LoadingButton(QPushButton):
         self._loading = True
         self._original_text = self.text()
         self.setText(f'    {message}')
+        self.setProperty('loading', True)
+        self.style().unpolish(self)
+        self.style().polish(self)
         self.setEnabled(False)
         self._spinner.start()
 
     def stop_loading(self, restore_text: str | None = None) -> None:
         self._loading = False
         self.setText(restore_text or self._original_text)
+        self.setProperty('loading', False)
+        self.style().unpolish(self)
+        self.style().polish(self)
         self.setEnabled(True)
         self._spinner.stop()
 

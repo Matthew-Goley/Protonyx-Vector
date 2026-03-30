@@ -63,6 +63,10 @@ QPushButton[accent='true']:disabled {
     background: #1e3a6e;
     color: #6a8fc4;
 }
+QPushButton[accent='true'][loading='true']:disabled {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #34a7ff, stop:0.33 #a256f6, stop:0.66 #e34ec6, stop:1 #fd8a83);
+    color: rgba(255, 255, 255, 180);
+}
 QLineEdit, QComboBox, QListWidget, QSpinBox, QTableWidget {
     background: #121828;
     border: 1px solid #2c364a;
@@ -178,6 +182,10 @@ QPushButton[accent='true'] {
     color: #ffffff;
     border: none;
     font-weight: 600;
+}
+QPushButton[accent='true'][loading='true']:disabled {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #34a7ff, stop:0.33 #a256f6, stop:0.66 #e34ec6, stop:1 #fd8a83);
+    color: rgba(255, 255, 255, 180);
 }
 QLineEdit, QComboBox, QListWidget, QSpinBox, QTableWidget {
     background: white;

@@ -7,6 +7,7 @@ from PyQt6.QtGui import QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
+    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -20,7 +21,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..constants import APP_NAME, APP_VERSION, COMPANY_NAME, VOLATILITY_LOOKBACK_PERIODS
+from ..constants import (
+    APP_NAME,
+    APP_VERSION,
+    COMPANY_NAME,
+    MONTE_CARLO_HORIZON_DAYS,
+    MONTE_CARLO_SIMULATIONS,
+    VOLATILITY_LOOKBACK_PERIODS,
+)
 from ..widgets import CardFrame, LoadingButton
 from .dashboard import _CONTENT_W
 
@@ -76,7 +84,6 @@ class _AccordionSection(CardFrame):
     def __init__(self, title: str, parent=None) -> None:
         super().__init__(parent)
         self._open = False
-        self._natural_h = 0
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -130,19 +137,19 @@ class _AccordionSection(CardFrame):
 
     def _measure(self) -> int:
         self._content.setMaximumHeight(16_777_215)
+        self._content.layout().activate()
         h = self._content.sizeHint().height()
         self._content.setMaximumHeight(0)
-        return max(h, 32)
+        return max(h, 40)
 
     def _toggle(self) -> None:
         if self._anim.state() == QPropertyAnimation.State.Running:
             return
         self._open = not self._open
         if self._open:
-            if not self._natural_h:
-                self._natural_h = self._measure()
+            natural_h = self._measure()
             self._anim.setStartValue(0)
-            self._anim.setEndValue(self._natural_h)
+            self._anim.setEndValue(natural_h)
             self._chevron.animate_to(90.0)
         else:
             self._anim.setStartValue(self._content.height())
@@ -153,6 +160,10 @@ class _AccordionSection(CardFrame):
     def _on_finished(self) -> None:
         if self._open:
             self._content.setMaximumHeight(16_777_215)
+        # Notify the parent container so the scroll area recomputes its range
+        p = self.parentWidget()
+        if p:
+            p.adjustSize()
 
 
 class QDoubleSpinBoxCompat(QSpinBox):
@@ -161,6 +172,7 @@ class QDoubleSpinBoxCompat(QSpinBox):
         self.setSingleStep(1)
         self.setRange(-100, 100)
         self.setSuffix('%')
+        self.setMinimumWidth(120)
 
     def value(self) -> float:  # type: ignore[override]
         return super().value() / 100
@@ -241,11 +253,29 @@ class SettingsPage(QWidget):
 
         volatility = self._add_accordion(layout, 'Volatility')
         self.lookback_combo = QComboBox(); self.lookback_combo.addItems(['3 months', '6 months', '1 year'])
-        self.low_vol_spin = QSpinBox(); self.low_vol_spin.setRange(1, 100)
-        self.high_vol_spin = QSpinBox(); self.high_vol_spin.setRange(1, 100)
+        self.low_vol_spin = QSpinBox(); self.low_vol_spin.setRange(1, 100); self.low_vol_spin.setMinimumWidth(120)
+        self.high_vol_spin = QSpinBox(); self.high_vol_spin.setRange(1, 100); self.high_vol_spin.setMinimumWidth(120)
         volatility.addRow('Lookback Period', self.lookback_combo)
         volatility.addRow('Low cutoff', self.low_vol_spin)
         volatility.addRow('High cutoff', self.high_vol_spin)
+
+        lens_signals = self._add_accordion(layout, 'Lens Signal Thresholds')
+        self.stock_conc_spin = QSpinBox(); self.stock_conc_spin.setRange(1, 100); self.stock_conc_spin.setSuffix('%'); self.stock_conc_spin.setMinimumWidth(120)
+        self.sector_conc_spin = QSpinBox(); self.sector_conc_spin.setRange(1, 100); self.sector_conc_spin.setSuffix('%'); self.sector_conc_spin.setMinimumWidth(120)
+        self.steep_dt_spin = QSpinBox(); self.steep_dt_spin.setRange(-100, -1); self.steep_dt_spin.setSuffix('%'); self.steep_dt_spin.setMinimumWidth(120)
+        self.high_beta_spin = QDoubleSpinBox(); self.high_beta_spin.setRange(0.5, 5.0); self.high_beta_spin.setSingleStep(0.1); self.high_beta_spin.setDecimals(1); self.high_beta_spin.setMinimumWidth(120)
+        self.stock_vol_spin = QSpinBox(); self.stock_vol_spin.setRange(1, 100); self.stock_vol_spin.setSuffix('%'); self.stock_vol_spin.setMinimumWidth(120)
+        lens_signals.addRow('Stock concentration', self.stock_conc_spin)
+        lens_signals.addRow('Sector concentration', self.sector_conc_spin)
+        lens_signals.addRow('Steep downtrend cutoff', self.steep_dt_spin)
+        lens_signals.addRow('High beta threshold', self.high_beta_spin)
+        lens_signals.addRow('Vol threshold', self.stock_vol_spin)
+
+        monte_carlo = self._add_accordion(layout, 'Monte Carlo')
+        self.mc_period_combo = QComboBox(); self.mc_period_combo.addItems(list(MONTE_CARLO_HORIZON_DAYS.keys()))
+        self.mc_sims_combo = QComboBox(); self.mc_sims_combo.addItems([str(n) for n in MONTE_CARLO_SIMULATIONS])
+        monte_carlo.addRow('Projection period', self.mc_period_combo)
+        monte_carlo.addRow('Simulations', self.mc_sims_combo)
 
         positions = self._add_section(layout, 'Positions')
         add_position = LoadingButton('Add New Position')
@@ -287,6 +317,15 @@ class SettingsPage(QWidget):
         self.lookback_combo.setCurrentText(vol['lookback'])
         self.low_vol_spin.setValue(int(vol['low_cutoff']))
         self.high_vol_spin.setValue(int(vol['high_cutoff']))
+        ls = settings.get('lens_signals', {})
+        self.stock_conc_spin.setValue(int(ls.get('stock_concentration_pct', 35)))
+        self.sector_conc_spin.setValue(int(ls.get('sector_concentration_pct', 50)))
+        self.steep_dt_spin.setValue(int(ls.get('steep_downtrend_pct', -20)))
+        self.high_beta_spin.setValue(float(ls.get('high_beta_threshold', 1.3)))
+        self.stock_vol_spin.setValue(int(ls.get('stock_vol_threshold_pct', 45)))
+        mc = settings.get('monte_carlo', {})
+        self.mc_period_combo.setCurrentText(mc.get('projection_period', '1 year'))
+        self.mc_sims_combo.setCurrentText(str(mc.get('simulations', 500)))
         self.remove_list.clear()
         for position in positions:
             item = QListWidgetItem(f"{position['ticker']} — {position['shares']:.4f}".rstrip('0').rstrip('.'))
@@ -313,6 +352,17 @@ class SettingsPage(QWidget):
             'lookback_period': VOLATILITY_LOOKBACK_PERIODS[self.lookback_combo.currentText()],
             'low_cutoff': self.low_vol_spin.value(),
             'high_cutoff': self.high_vol_spin.value(),
+        }
+        settings['lens_signals'] = {
+            'stock_concentration_pct': self.stock_conc_spin.value(),
+            'sector_concentration_pct': self.sector_conc_spin.value(),
+            'steep_downtrend_pct': self.steep_dt_spin.value(),
+            'high_beta_threshold': round(self.high_beta_spin.value(), 1),
+            'stock_vol_threshold_pct': self.stock_vol_spin.value(),
+        }
+        settings['monte_carlo'] = {
+            'projection_period': self.mc_period_combo.currentText(),
+            'simulations': int(self.mc_sims_combo.currentText()),
         }
         self.window.settings = settings
         self.window.store.save_settings(settings)

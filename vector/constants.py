@@ -30,6 +30,17 @@ DEFAULT_SETTINGS = {
         'low_cutoff': 30,
         'high_cutoff': 60,
     },
+    'lens_signals': {
+        'stock_concentration_pct': 35,
+        'sector_concentration_pct': 50,
+        'steep_downtrend_pct': -20,
+        'high_beta_threshold': 1.3,
+        'stock_vol_threshold_pct': 45,
+    },
+    'monte_carlo': {
+        'projection_period': '1 year',
+        'simulations': 500,
+    },
 }
 
 DEFAULT_APP_STATE = {
@@ -56,4 +67,53 @@ VOLATILITY_LOOKBACK_PERIODS = {
     '3 months': '3mo',
     '6 months': '6mo',
     '1 year': '1y',
+}
+
+MONTE_CARLO_HORIZON_DAYS: dict[str, int] = {
+    '3 months': 63,
+    '6 months': 126,
+    '1 year': 252,
+    '2 years': 504,
+}
+
+MONTE_CARLO_SIMULATIONS: list[int] = [100, 200, 500, 1000]
+
+# Broad-market index ETFs — treated as instant diversification, not single-stock concentration.
+INDEX_ETFS: frozenset[str] = frozenset({
+    'SPY', 'VOO', 'VTI', 'IVV', 'QQQ', 'VT', 'VXUS', 'ITOT', 'SCHB',
+    'VEA', 'VWO', 'SPDW', 'IEFA', 'EFA', 'SCHX', 'SCHD', 'VIG', 'MGK',
+    'QUAL', 'MOAT', 'RSP', 'DGRO', 'VYM', 'HDV', 'NOBL',
+})
+
+# Well-known lower-beta names per sector — used to suggest alternatives when portfolio beta is high.
+# These are examples of historically lower-beta equities; not investment advice.
+LOW_BETA_BY_SECTOR: dict[str, list[str]] = {
+    'Technology':             ['MSFT', 'AAPL', 'ACN', 'IBM', 'TXN'],
+    'Healthcare':             ['JNJ', 'ABT', 'MDT', 'BMY', 'PFE'],
+    'Consumer Defensive':     ['KO', 'PEP', 'WMT', 'PG', 'CL'],
+    'Financial Services':     ['BRK-B', 'V', 'MA', 'AXP', 'WFC'],
+    'Financials':             ['BRK-B', 'V', 'MA', 'AXP', 'WFC'],
+    'Industrials':            ['HON', 'MMM', 'ITW', 'EMR', 'PH'],
+    'Energy':                 ['CVX', 'XOM', 'COP', 'PSX', 'VLO'],
+    'Consumer Cyclical':      ['MCD', 'HD', 'LOW', 'TGT', 'YUM'],
+    'Communication Services': ['T', 'VZ', 'CMCSA', 'DIS', 'WBD'],
+    'Utilities':              ['NEE', 'SO', 'DUK', 'AEP', 'WEC'],
+    'Real Estate':            ['O', 'PLD', 'SPG', 'PSA', 'EQR'],
+    'Basic Materials':        ['LIN', 'APD', 'SHW', 'ECL', 'NEM'],
+}
+
+# Representative tickers per sector — used for the underrepresented-sector signal.
+SECTOR_SUGGESTIONS: dict[str, list[str]] = {
+    'Technology':             ['AAPL', 'MSFT', 'GOOGL'],
+    'Healthcare':             ['JNJ', 'UNH', 'PFE'],
+    'Consumer Defensive':     ['PG', 'KO', 'WMT'],
+    'Financial Services':     ['JPM', 'V', 'MA'],
+    'Financials':             ['JPM', 'V', 'MA'],
+    'Industrials':            ['HON', 'CAT', 'UNP'],
+    'Energy':                 ['XOM', 'CVX', 'COP'],
+    'Consumer Cyclical':      ['AMZN', 'HD', 'MCD'],
+    'Communication Services': ['GOOGL', 'META', 'DIS'],
+    'Utilities':              ['NEE', 'SO', 'DUK'],
+    'Real Estate':            ['AMT', 'PLD', 'O'],
+    'Basic Materials':        ['LIN', 'APD', 'SHW'],
 }

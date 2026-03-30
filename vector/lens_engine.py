@@ -247,15 +247,16 @@ def generate_lens(
     positions: list[dict[str, Any]],
     store: Any,
     settings: dict[str, Any],
-) -> tuple[str, str, list[str], float, str]:
+) -> tuple[str, str, list[str], float, str, str]:
     """
-    Analyse the portfolio and return a 5-tuple:
+    Analyse the portfolio and return a 6-tuple:
 
     - ``text``                — two plain-English observational sentences
     - ``color``               — hex color reflecting portfolio state
     - ``recommended_tickers`` — tickers relevant to the selected action
     - ``deposit_amount``      — dollar amount for Monte Carlo Graph B (0.0 if N/A)
     - ``underweight_sector``  — sector used for deposit math ('' if N/A)
+    - ``action_type``         — one of "buy" / "sell" / "rebalance" / "hold"
     """
     from .analytics import (
         annualized_volatility,
@@ -267,7 +268,12 @@ def generate_lens(
         score_volatility,
         sharpe_ratio,
     )
-    from .constants import VOLATILITY_LOOKBACK_PERIODS
+    from .constants import (
+        INDEX_ETFS,
+        LOW_BETA_BY_SECTOR,
+        SECTOR_SUGGESTIONS,
+        VOLATILITY_LOOKBACK_PERIODS,
+    )
 
     # ── Empty portfolio ───────────────────────────────────────────────────
     if not positions:
@@ -275,7 +281,7 @@ def generate_lens(
             'Add your first position to see Lens analytics tailored to your'
             ' actual holdings. Go to Settings and add a stock or ETF ticker'
             ' to get started.',
-            '#8d98af', [], 0.0, '',
+            '#8d98af', [], 0.0, '', 'hold',
         )
 
     # ── Settings ──────────────────────────────────────────────────────────
@@ -290,6 +296,12 @@ def generate_lens(
     period: str = VOLATILITY_LOOKBACK_PERIODS.get(lookback, '6mo')
     low_cut: int = int(vol_settings.get('low_cutoff', 30))
     high_cut: int = int(vol_settings.get('high_cutoff', 60))
+    _ls: dict[str, Any] = settings.get('lens_signals', {})
+    _stock_conc_pct: float = float(_ls.get('stock_concentration_pct', 35))
+    _sector_conc_pct: float = float(_ls.get('sector_concentration_pct', 50))
+    _steep_dt_pct: float = float(_ls.get('steep_downtrend_pct', -20))
+    _high_beta: float = float(_ls.get('high_beta_threshold', 1.3))
+    _stock_vol_pct: float = float(_ls.get('stock_vol_threshold_pct', 45)) / 100.0
 
     total_equity: float = sum(p.get('equity', 0.0) for p in positions) or 1.0
 
@@ -356,10 +368,11 @@ def generate_lens(
     )
     most_concentrated_pct: float = stock_pcts.get(most_concentrated_ticker, 0.0)
 
+    # Skip index ETFs for single-stock concentration check
     concentrated_stock: str | None = None
     concentrated_stock_pct: float = 0.0
     for t, pct in stock_pcts.items():
-        if pct > 40.0:
+        if pct > _stock_conc_pct and t not in INDEX_ETFS:
             concentrated_stock = t
             concentrated_stock_pct = pct
             break
@@ -501,34 +514,186 @@ def generate_lens(
     d: str = dir_label.lower()
     _HIGH_VOL_THRESHOLD = 70
 
+    # ── New signal pre-computation ─────────────────────────────────────────
+
+    # Signal 2 — Steep downtrend: any non-index position with annualised slope ≤ threshold
+    _steep_candidates = sorted(
+        (
+            (t, slopes[t] * 252)
+            for t in slopes
+            if slopes[t] * 252 <= _steep_dt_pct and t not in INDEX_ETFS
+        ),
+        key=lambda x: x[1],  # most negative first
+    )
+    steep_ticker: str = _steep_candidates[0][0] if _steep_candidates else ''
+    steep_slope_annual: float = _steep_candidates[0][1] if _steep_candidates else 0.0
+    steep_ticker_pct: float = stock_pcts.get(steep_ticker, 0.0)
+
+    # Signal 3 — Excessive single-stock volatility: annualised vol > threshold AND weight > 15%
+    _ev_candidates = sorted(
+        (
+            (t, vols[t] * 100, stock_pcts.get(t, 0.0))
+            for t in vols
+            if vols[t] > _stock_vol_pct and stock_pcts.get(t, 0.0) > 15.0
+            and t not in INDEX_ETFS
+        ),
+        key=lambda x: x[1],
+        reverse=True,  # most volatile first
+    )
+    ev_ticker: str = _ev_candidates[0][0] if _ev_candidates else ''
+    ev_vol: float = _ev_candidates[0][1] if _ev_candidates else 0.0
+    ev_pct: float = _ev_candidates[0][2] if _ev_candidates else 0.0
+
+    # Signal 4 — Winner concentration drift: weight > 30% AND slope > +15% annualised
+    _drift_candidates = sorted(
+        (
+            (t, stock_pcts[t])
+            for t in stock_pcts
+            if stock_pcts[t] > 30.0
+            and slopes.get(t, 0.0) * 252 > 15.0
+            and t not in INDEX_ETFS
+        ),
+        key=lambda x: x[1],
+        reverse=True,
+    )
+    drift_ticker: str = _drift_candidates[0][0] if _drift_candidates else ''
+    drift_ticker_pct: float = _drift_candidates[0][1] if _drift_candidates else 0.0
+
+    # Signal 5 — Index fund awareness: any INDEX_ETF position with weight > 30%
+    _index_candidates = sorted(
+        (
+            (p['ticker'], equities.get(p['ticker'], 0.0) / total_equity * 100)
+            for p in positions
+            if p['ticker'] in INDEX_ETFS
+            and equities.get(p['ticker'], 0.0) / total_equity * 100 > 30.0
+        ),
+        key=lambda x: x[1],
+        reverse=True,
+    )
+    index_ticker: str = _index_candidates[0][0] if _index_candidates else ''
+    index_pct: float = _index_candidates[0][1] if _index_candidates else 0.0
+
+    # Signal 6 — High portfolio beta: pre-computed, beta_val > 1.3
+    _low_beta_suggestions: list[str] = []
+    _low_beta_sector_name: str = ''
+    for _s in known_sectors:
+        _lb_cands = [t for t in LOW_BETA_BY_SECTOR.get(_s, []) if t not in held_tickers]
+        if _lb_cands:
+            _low_beta_suggestions.extend(_lb_cands[:2])
+            _low_beta_sector_name = _low_beta_sector_name or _s
+        if len(_low_beta_suggestions) >= 2:
+            break
+    low_beta_ticker1: str = _low_beta_suggestions[0] if len(_low_beta_suggestions) > 0 else 'lower-beta names'
+    low_beta_ticker2: str = _low_beta_suggestions[1] if len(_low_beta_suggestions) > 1 else low_beta_ticker1
+    low_beta_sector: str = _low_beta_sector_name or (next(iter(known_sectors), '') if known_sectors else '')
+    beta_impact: float = (beta_val or 1.0) * 5.0
+
+    # Signal 11 — Dead weight: weight < 2% AND flat/negative slope (≤ +2% annualised)
+    _dw_candidates = sorted(
+        (
+            (t, stock_pcts[t], slopes.get(t, 0.0) * 252)
+            for t in stock_pcts
+            if stock_pcts[t] < 2.0
+            and slopes.get(t, 0.0) * 252 <= 2.0
+            and t not in INDEX_ETFS
+        ),
+        key=lambda x: (x[1], x[2]),  # smallest weight first, then lowest slope
+    )
+    dw_ticker: str = _dw_candidates[0][0] if _dw_candidates else ''
+    dw_pct: float = _dw_candidates[0][1] if _dw_candidates else 0.0
+    dw_slope_annual: float = _dw_candidates[0][2] if _dw_candidates else 0.0
+
+    # Signal 12 — Underrepresented sector: 3+ sectors, one sector has only 1 stock and < 10% weight
+    _sector_tickers_map: dict[str, list[str]] = {}
+    for _p in positions:
+        _s2 = _p.get('sector') or 'Unknown'
+        _sector_tickers_map.setdefault(_s2, []).append(_p['ticker'])
+
+    _thin_candidates = [
+        (_s3, _sector_tickers_map[_s3][0], sector_weights.get(_s3, 0.0) / total_equity * 100)
+        for _s3 in _sector_tickers_map
+        if len(_sector_tickers_map[_s3]) == 1
+        and sector_weights.get(_s3, 0.0) / total_equity * 100 < 10.0
+        and _s3 not in ('Unknown', '')
+        and _sector_tickers_map[_s3][0] not in INDEX_ETFS
+    ]
+    _thin_candidates.sort(key=lambda x: x[2])  # smallest sector first
+    _thin_info = _thin_candidates[0] if _thin_candidates and sector_count >= 3 else None
+    thin_sector: str = _thin_info[0] if _thin_info else ''
+    thin_sector_ticker: str = _thin_info[1] if _thin_info else ''
+    thin_sector_pct: float = _thin_info[2] if _thin_info else 0.0
+    _ts_suggs = [t for t in SECTOR_SUGGESTIONS.get(thin_sector, []) if t not in held_tickers][:2]
+    sector_suggestion1: str = _ts_suggs[0] if len(_ts_suggs) > 0 else thin_sector
+    sector_suggestion2: str = _ts_suggs[1] if len(_ts_suggs) > 1 else sector_suggestion1
+
+    # Signal 13 — Unrealized loss flag: 6-month price decline > 20%
+    _loss_candidates = [
+        (t, abs((h[-1] - h[0]) / h[0] * 100))
+        for t, h in histories.items()
+        if len(h) >= 2 and h[0] > 0 and (h[-1] - h[0]) / h[0] < -0.20
+        and t not in INDEX_ETFS
+    ]
+    _loss_candidates.sort(key=lambda x: x[1], reverse=True)  # largest loss first
+    loss_ticker: str = _loss_candidates[0][0] if _loss_candidates else ''
+    loss_pct: float = _loss_candidates[0][1] if _loss_candidates else 0.0
+
     # ── Action priority ───────────────────────────────────────────────────
     action: str
+    # 1. Single position
     if n_pos == 1:
         action = 'single_position'
+    # 2. Steep downtrend — per-stock
+    elif steep_ticker:
+        action = 'steep_downtrend'
+    # 3. Excessive single-stock volatility
+    elif ev_ticker:
+        action = 'excessive_stock_vol'
+    # 4. Winner concentration drift
+    elif drift_ticker:
+        action = 'winner_drift'
+    # 5. Index fund awareness (preempts sector/stock concentration signals)
+    elif index_ticker:
+        action = 'index_fund_awareness'
+    # 6. High portfolio beta
+    elif beta_val is not None and beta_val > _high_beta:
+        action = 'high_portfolio_beta'
+    # 7. Sector over-concentration
+    elif top_sector_pct > _sector_conc_pct:
+        action = 'high_sector_concentration'
+    # 8. Single-stock concentration (> 35%, non-index)
     elif concentrated_stock is not None:
         action = 'high_single_stock'
-    elif top_sector_pct > 55.0:
-        action = 'high_sector_concentration'
+    # 9. Portfolio-wide downtrend
     elif vol_score >= _HIGH_VOL_THRESHOLD and d in ('depreciating', 'weak'):
         action = 'high_volatility_downtrend'
-    elif vol_score >= _HIGH_VOL_THRESHOLD and d in ('strong', 'steady'):
-        action = 'high_volatility_uptrend'
-    elif sector_count < 3:
-        action = 'low_diversification'
     elif d == 'weak':
         action = 'weak_downtrend'
     elif d == 'depreciating':
         action = 'depreciating_trend'
+    # 10. High-vol uptrend
+    elif vol_score >= _HIGH_VOL_THRESHOLD and d in ('strong', 'steady'):
+        action = 'high_volatility_uptrend'
     elif d == 'strong':
         action = 'strong_momentum'
     elif sharpe_val is not None and sharpe_val < 0:
         action = 'negative_sharpe'
-    elif beta_val is not None and beta_val > 1.4:
-        action = 'high_beta'
+    elif sector_count < 3:
+        action = 'low_diversification'
+    # 11. Dead weight positions
+    elif dw_ticker:
+        action = 'dead_weight'
+    # 12. Underrepresented sector
+    elif _thin_info is not None:
+        action = 'underrepresented_sector'
+    # 13. Unrealized loss flag
+    elif loss_ticker:
+        action = 'unrealized_loss'
     elif not has_dividend_positions and n_pos >= 3:
         action = 'low_yield_opportunity'
+    # 14. Neutral/diversified
     elif d in ('neutral', 'steady') and top_sector_pct < 40.0 and sector_count >= 3:
         action = 'neutral_diversified'
+    # 15. Hold fallback
     else:
         action = 'well_positioned'
 
@@ -594,6 +759,38 @@ def generate_lens(
         'div_ticker2':               div_ticker2,
         'dividend_sector_note':      dividend_sector_note,
         'div_deposit_str':           f'${div_deposit:,.0f}',
+        # Signal 2 — steep downtrend
+        'declining_ticker':          steep_ticker or worst_ticker,
+        'declining_slope_annual':    steep_slope_annual or worst_slope * 252,
+        'declining_ticker_pct':      steep_ticker_pct or stock_pcts.get(worst_ticker, 0.0),
+        # Signal 3 — excessive single-stock volatility
+        'volatile_ticker':           ev_ticker or most_volatile_ticker,
+        'volatile_ticker_vol':       ev_vol or most_volatile_vol,
+        'volatile_ticker_pct':       ev_pct or stock_pcts.get(most_volatile_ticker, 0.0),
+        # Signal 4 — winner drift
+        'drift_ticker':              drift_ticker or most_concentrated_ticker,
+        'drift_ticker_pct':          drift_ticker_pct or most_concentrated_pct,
+        # Signal 5 — index fund awareness
+        'index_ticker':              index_ticker or most_concentrated_ticker,
+        'index_pct':                 index_pct or most_concentrated_pct,
+        # Signal 6 — high portfolio beta
+        'low_beta_ticker1':          low_beta_ticker1,
+        'low_beta_ticker2':          low_beta_ticker2,
+        'low_beta_sector':           low_beta_sector,
+        'beta_impact':               beta_impact,
+        # Signal 11 — dead weight
+        'deadweight_ticker':         dw_ticker or worst_ticker,
+        'deadweight_pct':            dw_pct or stock_pcts.get(worst_ticker, 0.0),
+        'deadweight_slope_annual':   dw_slope_annual or worst_slope * 252,
+        # Signal 12 — underrepresented sector
+        'thin_sector':               thin_sector or underweight,
+        'thin_sector_ticker':        thin_sector_ticker or underweight_ticker1,
+        'thin_sector_pct':           thin_sector_pct,
+        'sector_suggestion1':        sector_suggestion1 or underweight_ticker1,
+        'sector_suggestion2':        sector_suggestion2 or underweight_ticker2,
+        # Signal 13 — unrealized loss
+        'loss_ticker':               loss_ticker or worst_ticker,
+        'loss_pct':                  loss_pct or abs(worst_slope * 252 * 0.5),
     }
 
     try:
@@ -610,41 +807,69 @@ def generate_lens(
             ' accurate Lens output.'
         )
 
+    # ── Action type map ───────────────────────────────────────────────────
+    _ACTION_TYPES: dict[str, str] = {
+        'single_position':           'buy',
+        'steep_downtrend':           'sell',
+        'excessive_stock_vol':       'sell',
+        'winner_drift':              'rebalance',
+        'index_fund_awareness':      'hold',
+        'high_portfolio_beta':       'buy',
+        'high_sector_concentration': 'buy',
+        'high_single_stock':         'buy',
+        'high_volatility_downtrend': 'sell',
+        'weak_downtrend':            'sell',
+        'depreciating_trend':        'sell',
+        'high_volatility_uptrend':   'hold',
+        'strong_momentum':           'hold',
+        'negative_sharpe':           'sell',
+        'high_beta':                 'buy',
+        'low_diversification':       'buy',
+        'dead_weight':               'sell',
+        'underrepresented_sector':   'buy',
+        'unrealized_loss':           'hold',
+        'low_yield_opportunity':     'buy',
+        'neutral_diversified':       'buy',
+        'well_positioned':           'hold',
+    }
+    action_type: str = _ACTION_TYPES.get(action, 'hold')
+
     # ── Recommended tickers ───────────────────────────────────────────────
-    _diversification_actions = frozenset({
-        'single_position', 'high_single_stock', 'high_sector_concentration',
-        'low_diversification', 'neutral_diversified',
-    })
-    if action in _diversification_actions:
-        recommended_tickers: list[str] = _sector_ticker_list(underweight, held_tickers)
+    recommended_tickers: list[str]
+    if action in ('single_position', 'high_sector_concentration',
+                  'low_diversification', 'neutral_diversified',
+                  'high_volatility_downtrend', 'high_volatility_uptrend',
+                  'high_beta'):
+        recommended_tickers = _sector_ticker_list(underweight, held_tickers)
+    elif action == 'high_single_stock':
+        recommended_tickers = _sector_ticker_list(underweight, held_tickers)
     elif action == 'low_yield_opportunity':
         recommended_tickers = _sector_ticker_list(dividend_sector, held_tickers)
+    elif action == 'high_portfolio_beta':
+        recommended_tickers = [t for t in _low_beta_suggestions if t][:3]
+    elif action == 'underrepresented_sector':
+        recommended_tickers = [t for t in [sector_suggestion1, sector_suggestion2] if t and t != thin_sector]
     else:
-        recommended_tickers = []
+        # All other signals (including sell/hold) point the deposit at the underweight sector
+        recommended_tickers = _sector_ticker_list(underweight, held_tickers)
 
     if not recommended_tickers:
         recommended_tickers = sorted(slopes, key=slopes.__getitem__, reverse=True)[:3]
 
-    # ── Return deposit amount (Monte Carlo uses this) ─────────────────────
-    _rebalancing_actions = frozenset({
-        'single_position', 'high_single_stock', 'high_sector_concentration',
-        'low_diversification', 'neutral_diversified', 'low_yield_opportunity',
-    })
-    if action in _rebalancing_actions:
-        return_deposit: float = (
-            div_deposit if action == 'low_yield_opportunity' else uw_deposit
-        )
-        return_underweight: str = (
-            dividend_sector if action == 'low_yield_opportunity' else underweight
-        )
+    # ── Return deposit amount — always populated so Monte Carlo Graph B ───
+    # and the pie chart have something to display for every signal.
+    if action == 'low_yield_opportunity':
+        return_deposit: float = div_deposit
+        return_underweight: str = dividend_sector
     else:
-        return_deposit = 0.0
-        return_underweight = ''
+        return_deposit = uw_deposit
+        return_underweight = underweight
 
     # ── Snapshot ──────────────────────────────────────────────────────────
     _save_snapshot({
         'timestamp':               datetime.now(timezone.utc).isoformat(),
         'portfolio_state':         action,
+        'action_type':             action_type,
         'direction_label':         dir_label,
         'direction_slope':         round(weighted_slope, 6),
         'volatility_label':        vol_label,
@@ -673,4 +898,5 @@ def generate_lens(
         recommended_tickers,
         return_deposit,
         return_underweight,
+        action_type,
     )

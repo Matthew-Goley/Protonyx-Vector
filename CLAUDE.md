@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Vector** is a PyQt6 desktop portfolio analytics app for stock investors. It tracks positions, fetches market data via Yahoo Finance (yfinance), and displays analytics (trend direction, volatility, sector allocation, Sharpe ratio, beta, dividends) in a customisable dark/light themed dashboard. Data is persisted locally in `%LOCALAPPDATA%/Protonyx/Vector/` (falls back to `~/Vector/data/`) as JSON files.
 
-Current version: **0.3.5**
+Current version: **0.3.6**
 
 ## Setup & Running
 
@@ -22,7 +22,7 @@ No build step, test suite, or linter is configured.
 ## Building (Nuitka)
 
 ```bash
-python -m nuitka --standalone --windows-console-mode=disable --enable-plugin=pyqt6 --output-filename=aa"Vector-v0.3.5.exe" --include-data-dir=assets=assets main.py
+python -m nuitka --standalone --windows-console-mode=disable --enable-plugin=pyqt6 --output-filename="Vector-v0.3.6.exe" --include-data-dir=assets=assets main.py
 ```
 
 - `--include-data-dir=assets=assets` copies the entire `assets/` folder next to the exe
@@ -45,8 +45,9 @@ python -m nuitka --standalone --windows-console-mode=disable --enable-plugin=pyq
 | `vector/store.py` | `DataStore` — single source of truth: positions, settings, app state, market data, layout; replaces `storage.py` |
 | `vector/market.py` | Legacy `MarketDataService`; superseded by `DataStore` but may still be referenced |
 | `vector/storage.py` | Legacy `StorageManager`; superseded by `DataStore` |
-| `vector/lens_engine.py` | `generate_lens()` — computes portfolio state, selects templates, returns 5-tuple |
+| `vector/lens_engine.py` | `generate_lens()` — computes portfolio state, selects templates, returns 6-tuple |
 | `vector/lens_templates.py` | `_TEMPLATES` dict and `_COLORS` dict (extracted from `lens_engine.py`) |
+| `vector/monte_carlo.py` | `run_projection()`, `build_historical_curve()` — GBM Monte Carlo simulation |
 | `vector/widget_base.py` | `VectorWidget` — base `QFrame` for all dashboard widgets; handles edit-mode drag, context menu |
 | `vector/widget_registry.py` | `discover_widgets()` / `get_widget_class()` — registry of all concrete widget types |
 | `vector/widget_types/` | 8 concrete widget implementations + `LensDisplay` (see below) |
@@ -118,17 +119,39 @@ All page-level QWidget classes live here. `vector/app.py` imports from this subp
 
 ### Lens Engine (`lens_engine.py` + `lens_templates.py`)
 
-`generate_lens(positions, store, settings)` returns a **5-tuple**: `(text, color, recommended_tickers, deposit_amount, underweight_sector)`.
+`generate_lens(positions, store, settings)` returns a **6-tuple**: `(text, color, recommended_tickers, deposit_amount, underweight_sector, action_type)`.
 
-- `text` — two plain-English sentences covering risk and next-deposit guidance
+- `text` — two plain-English sentences covering risk and next-deposit guidance (observational, not directive)
 - `color` — hex color reflecting portfolio state (from `_COLORS` in `lens_templates.py`)
-- `recommended_tickers` — list of tickers suggested for the next deposit
-- `deposit_amount` — dollar amount to bring the underweight sector to equal weight
+- `recommended_tickers` — list of tickers suggested for the next deposit (used by Monte Carlo Graph B)
+- `deposit_amount` — dollar amount to bring the underweight sector to equal weight (always non-zero)
 - `underweight_sector` — name of the recommended sector
+- `action_type` — one of `"buy"`, `"sell"`, `"rebalance"`, `"hold"`
 
 Template sentence banks (`_TEMPLATES`) and state color map (`_COLORS`) live in `vector/lens_templates.py`; `lens_engine.py` imports them from there.
 
-Action priority: single position → high concentration (stock) → high concentration (sector) → weak/depreciating downtrend → high-vol uptrend → neutral/diversify → hold.
+**Action priority (15 steps, first match wins):**
+1. Single position
+2. Steep downtrend (per-stock, configurable threshold, default ≤ −20% annualised)
+3. Excessive single-stock volatility (configurable, default > 45% annualised vol AND > 15% weight)
+4. Winner concentration drift (weight > 30% AND slope > +15% annualised)
+5. Index fund awareness (any INDEX_ETF > 30% weight)
+6. High portfolio beta (configurable threshold, default > 1.3)
+7. Sector over-concentration (configurable, default > 50%)
+8. Single-stock concentration (configurable, default > 35%, non-index)
+9. High-vol downtrend / weak downtrend / depreciating trend
+10. High-vol uptrend / strong momentum
+11. Negative Sharpe
+12. Low diversification (< 3 sectors)
+13. Dead weight (weight < 2% AND slope ≤ +2%)
+14. Underrepresented sector (1 stock, < 10% weight)
+15. Unrealized loss / low yield / neutral-diversified / hold fallback
+
+**Signal thresholds** are configurable via Settings → Lens Signal Thresholds and stored in `settings.json` under `lens_signals`.
+
+`INDEX_ETFS` (frozenset, 25 tickers), `LOW_BETA_BY_SECTOR` (dict), `SECTOR_SUGGESTIONS` (dict) live in `constants.py`.
+
+`LensDisplay.refresh()` in `widget_types/lens.py` handles all tuple lengths (6, 5, 4, 3, 2) for backwards compatibility.
 
 ### Monte Carlo (Lens page)
 
@@ -137,6 +160,30 @@ Action priority: single position → high concentration (stock) → high concent
 - `new_total` (portfolio + deposit) is used only to compute post-deposit weight proportions for Graph B.
 - Projections display percentage change relative to current equity, not raw dollar values.
 - matplotlib `FigureCanvasQTAgg` captures wheel events — fixed with `self._canvas.wheelEvent = lambda event: event.ignore()` so scrolling works when the mouse is over a chart.
+- Monte Carlo parameters (projection period, simulation count) are configurable via Settings → Monte Carlo and stored under `monte_carlo` in `settings.json`. Mapping constants: `MONTE_CARLO_HORIZON_DAYS`, `MONTE_CARLO_SIMULATIONS` in `constants.py`.
+
+### Settings Page (`pages/settings.py`)
+
+Six accordion sections plus two static sections:
+
+| Section | Type | Contents |
+|---|---|---|
+| General | Static card | Theme, currency, date format |
+| Data & Refresh | Accordion | Auto-refresh interval, clear cache, reset all data |
+| Portfolio Direction Thresholds | Accordion | Strong/steady/neutral/weak/depreciating slope cutoffs |
+| Volatility | Accordion | Lookback period, low/high vol cutoffs |
+| Lens Signal Thresholds | Accordion | Stock/sector concentration %, steep downtrend %, high beta threshold, vol threshold % |
+| Monte Carlo | Accordion | Projection period combo, simulation count combo |
+| Positions | Static card | Add/remove positions |
+| About | Static card | Version, brand, credits |
+
+**Accordion fix**: `_AccordionSection._measure()` always remeasures (no cache), forces `layout().activate()` before `sizeHint()`, and calls `parent.adjustSize()` in `_on_finished()` so the scroll area recomputes its range when multiple accordions are open simultaneously.
+
+**LoadingButton gradient**: `LoadingButton.start_loading()` sets `setProperty('loading', True)` + `style().unpolish/polish()` before `setEnabled(False)`. The CSS rule `QPushButton[accent='true'][loading='true']:disabled` in both stylesheets preserves the gradient during loading state.
+
+### Onboarding (`pages/onboarding.py`)
+
+`OnboardingPage` keyboard shortcut: pressing **A** opens the Add Position dialog (calls `open_add_modal()`).
 
 ### DataStore (`store.py`)
 
@@ -173,7 +220,7 @@ All files live under `%LOCALAPPDATA%/Protonyx/Vector/` (Windows) or `~/Vector/da
 | File | Contents |
 |---|---|
 | `positions.json` | List of position objects: `ticker`, `shares`, `equity`, `sector`, `name`, `price`, `added_at` |
-| `settings.json` | Theme, currency, date_format, refresh_interval, direction_thresholds, volatility config |
+| `settings.json` | Theme, currency, date_format, refresh_interval, direction_thresholds, volatility, lens_signals, monte_carlo |
 | `app_state.json` | `onboarding_complete`, `first_launch_date` |
 | `market_data.json` | Per-ticker: quote, meta, history, history_ohlcv, history_intraday, dividends, earnings — with UTC timestamps |
 | `dashboard_layout.json` | Ordered list of `{class_name, row, col, rowspan, colspan}` for the dashboard grid |
